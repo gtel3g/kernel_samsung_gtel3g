@@ -86,6 +86,10 @@ static inline void rb_link_node(struct rb_node * node, struct rb_node * parent,
 }
 
 
+#define rb_entry_safe(ptr, type, member) \
+	({ typeof(ptr) ____ptr = (ptr); \
+	   ____ptr ? rb_entry(____ptr, type, member) : NULL; \
+	})
 
 /**
  * rbtree_postorder_for_each_entry_safe - iterate over rb_root in post order of
@@ -97,12 +101,9 @@ static inline void rb_link_node(struct rb_node * node, struct rb_node * parent,
  * @field:	the name of the rb_node field within 'type'.
  */
 #define rbtree_postorder_for_each_entry_safe(pos, n, root, field) \
-pos = rb_entry(rb_first_postorder(root), typeof(*pos), field),\
-		n = rb_entry(rb_next_postorder(&pos->field), \
-			typeof(*pos), field); \
-	     &pos->field; \
-	     pos = n, \
-		n = rb_entry(rb_next_postorder(&pos->field), \
-			typeof(*pos), field))
+	for (pos = rb_entry_safe(rb_first_postorder(root), typeof(*pos), field); \
+	     pos && ({ n = rb_entry_safe(rb_next_postorder(&pos->field), \
+			typeof(*pos), field); 1; }); \
+	     pos = n)
 
 #endif	/* _LINUX_RBTREE_H */
