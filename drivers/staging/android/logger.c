@@ -880,19 +880,19 @@ static int __init logger_init(void)
 {
 	int ret;
 
-	ret = create_log(LOGGER_LOG_MAIN, 512*1024);
+	ret = create_log(LOGGER_LOG_MAIN, 128*1024);
 	if (unlikely(ret))
 		goto out;
 
-	ret = create_log(LOGGER_LOG_EVENTS, 512*1024);
+	ret = create_log(LOGGER_LOG_EVENTS, 128*1024);
 	if (unlikely(ret))
 		goto out;
 
-	ret = create_log(LOGGER_LOG_RADIO, 512*1024);
+	ret = create_log(LOGGER_LOG_RADIO, 64*1024);
 	if (unlikely(ret))
 		goto out;
 
-	ret = create_log(LOGGER_LOG_SYSTEM, 512*1024);
+	ret = create_log(LOGGER_LOG_SYSTEM, 128*1024);
 	if (unlikely(ret))
 		goto out;
 #if defined(CONFIG_SEC_DEBUG)
