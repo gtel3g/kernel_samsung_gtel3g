@@ -69,6 +69,7 @@
 #include <linux/gcd.h>
 #include <linux/freezer.h>
 #include <linux/sradix-tree.h>
+#include <linux/huge_mm.h>
 
 #include <asm/tlbflush.h>
 #include "internal.h"
@@ -2670,7 +2671,7 @@ out:
  * to the next pass of ksmd - consider, for example, how ksmd might be
  * in cmp_and_merge_page on one of the rmap_items we would be removing.
  */
-inline int unmerge_uksm_pages(struct vm_area_struct *vma,
+int unmerge_uksm_pages(struct vm_area_struct *vma,
 		      unsigned long start, unsigned long end)
 {
 	unsigned long addr;
