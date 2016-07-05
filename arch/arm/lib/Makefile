@@ -50,8 +50,8 @@ lib-$(CONFIG_ARCH_SHARK)	+= io-shark.o
 $(obj)/csumpartialcopy.o:	$(obj)/csumpartialcopygeneric.S
 $(obj)/csumpartialcopyuser.o:	$(obj)/csumpartialcopygeneric.S
 
-#ifeq ($(CONFIG_KERNEL_MODE_NEON),y)
+ifeq ($(CONFIG_KERNEL_MODE_NEON),y)
   NEON_FLAGS			:= -mfloat-abi=softfp -marm -mfpu=neon-vfpv4 -funsafe-math-optimizations
   CFLAGS_xor-neon.o		+= $(NEON_FLAGS)
   obj-y				+= xor-neon.o
-#endif
+endif

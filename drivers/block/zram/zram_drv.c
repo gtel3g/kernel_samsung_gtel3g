@@ -748,7 +748,7 @@ static void zram_reset_device(struct zram *zram, bool reset_capacity)
 	}
 
 	zcomp_destroy(zram->comp);
-	zram->max_comp_streams = 5;
+	zram->max_comp_streams = 4;
 
 	zram_meta_free(zram->meta);
 	zram->meta = NULL;
