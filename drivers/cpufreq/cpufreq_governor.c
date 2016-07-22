@@ -26,11 +26,11 @@
 #include <linux/tick.h>
 #include <linux/types.h>
 #include <linux/workqueue.h>
-#include <linux/input.h>
+/*#include <linux/input.h>*/
 
 #include "cpufreq_governor.h"
 
-extern struct input_handler dbs_input_handler;
+/*extern struct input_handler dbs_input_handler;*/
 
 static struct kobject *get_governor_parent_kobj(struct cpufreq_policy *policy)
 {
@@ -387,6 +387,13 @@ int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 			od_ops->powersave_bias_init_cpu(cpu);
 		}
 
+/*		if(!cpu)
+		{
+			if(input_register_handler(&dbs_input_handler))
+			{
+				pr_err("[DVFS] input_register_handler failed\n");
+			}
+		}*/
 		mutex_unlock(&dbs_data->mutex);
 
 		/* Initiate timer time stamp */
@@ -404,6 +411,12 @@ int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 
 		mutex_lock(&dbs_data->mutex);
 		mutex_destroy(&cpu_cdbs->timer_mutex);
+
+	/*	if (!cpu)
+		{
+			input_unregister_handler(&dbs_input_handler);
+		}*/
+
 
 		mutex_unlock(&dbs_data->mutex);
 

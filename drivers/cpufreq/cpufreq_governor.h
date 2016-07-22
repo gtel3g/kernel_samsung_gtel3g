@@ -211,6 +211,7 @@ struct sd_dbs_tuners {
 	unsigned int cpu_down_threshold;
 	unsigned int cpu_down_count;
 	unsigned int cpu_num_limit;
+	unsigned int cpu_num_min_limit;
 };
 
 /* Common Governer data across policies */

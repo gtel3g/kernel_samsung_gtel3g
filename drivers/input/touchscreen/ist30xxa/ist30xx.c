@@ -407,7 +407,7 @@ void print_tsp_event(finger_info *finger)
 						touch_cpufreq_lock, PTR_ERR(min_handle));
 						min_handle = NULL;
 					}
-					_store_cpu_num_min_limit(2);
+					//_store_cpu_num_min_limit(2);
 					tsp_info("cpu freq on\n");
 				}
 			}
@@ -446,7 +446,7 @@ void print_tsp_event(finger_info *finger)
 			//printk(KERN_ERR "[TOUCH_BOOSTER]%s %d\n",__func__,__LINE__);
 				cpufreq_limit_put(min_handle);
 				min_handle = NULL;
-				_store_cpu_num_min_limit(1);
+				//_store_cpu_num_min_limit(1);
 				tsp_info("cpu freq off\n");
 			}
 #endif

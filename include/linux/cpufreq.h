@@ -115,6 +115,8 @@ struct cpufreq_policy {
 
 	struct kobject		kobj;
 	struct completion	kobj_unregister;
+
+	unsigned int util;
 };
 
 #define CPUFREQ_ADJUST			(0)
