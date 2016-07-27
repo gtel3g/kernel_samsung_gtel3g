@@ -18,10 +18,6 @@
 #include "zcomp_lzo.h"
 #ifdef CONFIG_ZRAM_LZ4_COMPRESS
 #include "zcomp_lz4.h"
-//#include "zcomp_lz4hc.h"
-#endif
-#ifdef CONFIG_ZRAM_ZLIB_COMPRESS
-#include "zcomp_zlib.h"
 #endif
 
 /*
@@ -51,10 +47,6 @@ static struct zcomp_backend *backends[] = {
 	&zcomp_lzo,
 #ifdef CONFIG_ZRAM_LZ4_COMPRESS
 	&zcomp_lz4,
-//	&zcomp_lz4hc,
-#endif
-#ifdef CONFIG_ZRAM_ZLIB_COMPRESS
-	&zcomp_zlib,
 #endif
 	NULL
 };
@@ -316,16 +308,10 @@ int zcomp_compress(struct zcomp *comp, struct zcomp_strm *zstrm,
 			zstrm->private);
 }
 
-int zcomp_decompress(struct zcomp *comp, struct zcomp_strm *zstrm,
-		const unsigned char *src,
+int zcomp_decompress(struct zcomp *comp, const unsigned char *src,
 		size_t src_len, unsigned char *dst)
 {
-	void *private = NULL;
-
-	if (unlikely(zstrm))
-		private = zstrm->private;
-
-	return comp->backend->decompress(src, src_len, dst, private);
+	return comp->backend->decompress(src, src_len, dst);
 }
 
 void zcomp_destroy(struct zcomp *comp)
@@ -334,19 +320,6 @@ void zcomp_destroy(struct zcomp *comp)
 	kfree(comp);
 }
 
-void *zcomp_decompress_begin(struct zcomp *comp)
-{
-	if (unlikely(comp->backend->flags() & ZCOMP_NEED_READ_ZSTRM))
-		return zcomp_strm_find(comp);
-
-	return NULL;
-}
-
-void zcomp_decompress_end(struct zcomp *comp, void *private)
-{
-	if (unlikely(private))
-		zcomp_strm_release(comp, private);
-}
 /*
  * search available compressors for requested algorithm.
  * allocate new zcomp and initialize it. return compressing
