@@ -90,9 +90,3 @@ SUBSYS(bfqio)
 #endif
 
 /* */
-
-#if IS_SUBSYS_ENABLED(CONFIG_CGROUP_BFQIO)
-SUBSYS(bfqio)
-#endif
-
-/* */
