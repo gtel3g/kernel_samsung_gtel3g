@@ -35,6 +35,8 @@
 #include <linux/input.h>
 #include <linux/sched/rt.h>
 
+#include "cpufreq_governor.h"
+
 static int active_count;
 
 struct cpufreq_interactive_cpuinfo {
@@ -130,11 +132,11 @@ static bool io_is_busy = 1;
  * up_threshold_any_cpu_freq then do not let the frequency to drop below
  * sync_freq
  */
-static unsigned int up_threshold_any_cpu_load = 95;
-static unsigned int sync_freq = 729600;
-static unsigned int up_threshold_any_cpu_freq = 960000;
+static unsigned int up_threshold_any_cpu_load = 80;
+static unsigned int sync_freq = 600000;
+static unsigned int up_threshold_any_cpu_freq = 1000000;
 
-static int two_phase_freq_array[NR_CPUS] = {[0 ... NR_CPUS-1] = 1728000} ;
+static int two_phase_freq_array[NR_CPUS] = {[0 ... NR_CPUS-1] = 1600000} ;
 
 static int cpufreq_governor_intelliactive(struct cpufreq_policy *policy,
 		unsigned int event);
