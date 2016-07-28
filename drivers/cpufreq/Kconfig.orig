@@ -129,17 +129,6 @@ config CPU_FREQ_DEFAULT_GOV_SPRDEMAND
 	  governor. If unsure have a look at the help section of the
 	  driver. Fallback governor will be the performance governor.
 
-
-config CPU_FREQ_DEFAULT_GOV_INTELLIACTIVE
-	bool "intelliactive"
-	select CPU_FREQ_GOV_INTELLIACTIVE
-	help
-	  Use the CPUFreq governor 'intelliactive' as default. This allows
-	  you to get a full dynamic cpu frequency capable system by simply
-	  loading your cpufreq low-level hardware driver, using the
-	  'interactive' governor for latency-sensitive workloads.
-
-
 endchoice
 
 config CPU_FREQ_GOV_PERFORMANCE
@@ -255,30 +244,6 @@ config CPU_FREQ_GOV_SPRDEMAND
 	  If you don't have one of these architectures or devices, use
 	  'ondemand' instead.
 
-config SCX35_1300MHZ
-	bool "SCX35 1300MHZ"
-	depends on ARCH_SCX35
-	default n
-	help
-	  enable the 1300MHZ
-
-config CPU_FREQ_GOV_INTELLIACTIVE
-	tristate "'intelliactive' cpufreq policy governor"
-	help
-	  'intelliactive' - This driver adds a dynamic cpufreq policy governor
-	  designed for latency-sensitive workloads.
-
-	  This governor attempts to reduce the latency of clock
-	  increases so that the system is more responsive to
-	  interactive workloads.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called cpufreq_interactive.
-
-	  For details, take a look at linux/Documentation/cpu-freq.
-
-	  If in doubt, say N.
-	  
 config CPU_BOOST
 	tristate "Event base short term CPU freq boost"
 	depends on CPU_FREQ
