@@ -582,6 +582,7 @@ CONFIG_CMDLINE_EXTEND=y
 #
 # CPU Power Management
 #
+CONFIG_WQ_POWER_EFFICIENT_DEFAULT=y
 
 #
 # CPU Frequency scaling
