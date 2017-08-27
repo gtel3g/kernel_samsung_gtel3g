@@ -95,6 +95,7 @@ static int boost_adjust_notify(struct notifier_block *nb, unsigned long val,
 
 static struct notifier_block boost_adjust_nb = {
 	.notifier_call = boost_adjust_notify,
+	.priority = INT_MAX,
 };
 
 static void do_boost_rem(struct work_struct *work)
@@ -204,6 +205,9 @@ static void do_input_boost(struct work_struct *work)
 	unsigned int i, ret;
 	struct cpu_sync *i_sync_info;
 	struct cpufreq_policy policy;
+
+	if (!input_boost_ms)
+		return;
 
 	for_each_online_cpu(i) {
 
