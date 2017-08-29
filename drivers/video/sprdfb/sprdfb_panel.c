@@ -23,6 +23,10 @@
 #include "sprdfb_lcdc_reg.h"
 #include <linux/gpio.h>
 
+#ifdef CONFIG_POWERSUSPEND
+#include <linux/powersuspend.h>
+#endif
+
 static LIST_HEAD(panel_list_main);
 static LIST_HEAD(panel_list_sub);
 static DEFINE_MUTEX(panel_mutex);
@@ -669,6 +673,10 @@ void sprdfb_panel_suspend(struct sprdfb_device *dev)
 	else if (!dev->panel->ops->panel_pin_init)
 		panel_reset(dev);
 
+#ifdef CONFIG_POWERSUSPEND
+	set_power_suspend_state_panel_hook(POWER_SUSPEND_ACTIVE);
+#endif
+
 	/* 2. clk/data lane enter ulps */
 	if (dev->panel->if_ctrl->panel_if_enter_ulps)
 		dev->panel->if_ctrl->panel_if_enter_ulps(dev);
@@ -711,6 +719,10 @@ void sprdfb_panel_resume(struct sprdfb_device *dev, bool from_deep_sleep)
 
 	pr_info("[LCD] %s, + enable:%d, from_deep_sleep:%d\n",
 			__func__, dev->enable, from_deep_sleep);
+
+#ifdef CONFIG_POWERSUSPEND
+		set_power_suspend_state_panel_hook(POWER_SUSPEND_INACTIVE);
+#endif
 
 	if (from_deep_sleep) {
 		if (dev->panel->ops->panel_power)
