@@ -35,9 +35,13 @@ enum zpool_mapmode {
 
 	ZPOOL_MM_DEFAULT = ZPOOL_MM_RW
 };
-
+#ifdef CONFIG_ZSWAP
+struct zpool *zpool_create_pool(char *type, gfp_t gfp, struct zpool_ops *ops);
+#else
+/*update zram code to 4.0.0.rc5 kernel*/
 struct zpool *zpool_create_pool(char *type, char *name,
 			gfp_t gfp, struct zpool_ops *ops);
+#endif
 
 char *zpool_get_type(struct zpool *pool);
 
@@ -80,8 +84,12 @@ struct zpool_driver {
 	struct module *owner;
 	atomic_t refcount;
 	struct list_head list;
-
+#ifdef CONFIG_ZSWAP
+	void *(*create)(gfp_t gfp, struct zpool_ops *ops);
+#else
+	/*update zram code to 4.0.0.rc5 kernel*/
 	void *(*create)(char *name, gfp_t gfp, struct zpool_ops *ops);
+#endif
 	void (*destroy)(void *pool);
 
 	int (*malloc)(void *pool, size_t size, gfp_t gfp,
