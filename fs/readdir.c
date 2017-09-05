@@ -220,7 +220,7 @@ SYSCALL_DEFINE3(getdents, unsigned int, fd,
 	buf.previous = NULL;
 	buf.count = count;
 	buf.error = 0;
-	buf.romnt = (file->f_path.dentry->d_sb->s_flags & MS_RDONLY);
+	buf.romnt = (f.file->f_path.dentry->d_sb->s_flags & MS_RDONLY);
 
 	error = vfs_readdir(f.file, filldir, &buf);
 	if (error >= 0)
@@ -304,7 +304,7 @@ SYSCALL_DEFINE3(getdents64, unsigned int, fd,
 	buf.previous = NULL;
 	buf.count = count;
 	buf.error = 0;
-	buf.romnt = (file->f_path.dentry->d_sb->s_flags & MS_RDONLY);
+	buf.romnt = (f.file->f_path.dentry->d_sb->s_flags & MS_RDONLY);
 
 	error = vfs_readdir(f.file, filldir64, &buf);
 	if (error >= 0)
