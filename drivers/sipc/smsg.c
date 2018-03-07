@@ -119,7 +119,7 @@ irqreturn_t smsg_irq_handler(int irq, void *dev_id)
 		atomic_dec(&(ipc->busy[msg->channel]));
 	}
 
-	wake_lock_timeout(&sipc_wake_lock, HZ / 2);
+	wake_lock_timeout(&sipc_wake_lock, HZ / 4);
 
 	return IRQ_HANDLED;
 }
