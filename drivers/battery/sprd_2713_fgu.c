@@ -703,7 +703,7 @@ static void sprdfgu_irq_works(struct work_struct *work)
 	uint32_t adc;
 	int cur_soc;
 
-	wake_lock_timeout(&(sprdfgu_data.low_power_lock), 2 * HZ);
+	wake_lock_timeout(&(sprdfgu_data.low_power_lock), 1 * HZ);
 
 	printk("sprdfgu: sprdfgu_irq_works......0x%x.cur vol = %d\n",
 	       sprdfgu_data.int_status, sprdfgu_read_vbat_vol());
