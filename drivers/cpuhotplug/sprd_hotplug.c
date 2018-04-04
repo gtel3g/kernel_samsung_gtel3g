@@ -626,10 +626,7 @@ void dbs_check_cpu_sprd()
 		 * not that the system is actually idle. So do not add
 		 * the iowait time to the cpu idle time.
 		 */
-<<<<<<< HEAD
-=======
-		io_busy = g_sd_tuners->io_is_busy;
->>>>>>> 4121d76... cpufreq: governors: Move get_governor_parent_kobj() and get_cpu_idle_time() to cpufreq.c
+
 		cur_idle_time = get_cpu_idle_time(j, &cur_wall_time, io_busy);
 
 		wall_time = (unsigned int)
