@@ -13,7 +13,7 @@
 # set up defaults if not defined by the user
 TIMESTAMP ?= default
 OS_MEMORY_KERNEL_BUFFER_SIZE_IN_MB ?= 16
-USING_GPU_UTILIZATION = 1
+USING_GPU_UTILIZATION ?= 1
 MALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP ?= 0
 MALI_PP_SCHEDULER_KEEP_SUB_JOB_STARTS_ALIGNED ?= 0
 MALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP_BETWEEN_APPS ?= 0
@@ -21,13 +21,17 @@ MALI_UPPER_HALF_SCHEDULING ?= 1
 USING_PP_CORE = 2
 MALI_ENABLE_CPU_CYCLES ?= 0
 MALI_ENABLE_GPU_CONTROL_IN_PARAM ?= 1
-DFS_MAX_FREQ ?= 460800
-DFS_MIN_FREQ ?= 460800
+DFS_MAX_FREQ = 460800
+DFS_MIN_FREQ = 460800
 
 ifeq ($(CONFIG_MALI400),y)
     MALI_ENABLE_GPU_CONTROL_IN_PARAM = 0
 else
     MALI_ENABLE_GPU_CONTROL_IN_PARAM = 1
+endif
+
+ifeq ($(CONFIG_ARCH_SCX30G),y)
+	ccflags-y += -DCONFIG_ARCH_SCX30G
 endif
 
 mali-y += \
@@ -148,6 +152,7 @@ ccflags-$(CONFIG_MALI400_DEBUG) += -DDEBUG
 
 # Use our defines when compiling
 ccflags-y += -I$(src) -I$(src)/include -I$(src)/common -I$(src)/linux -I$(src)/platform -I$(src)/platform/$(MALI_PLATFORM)
+ccflags-y += -O3 -ffast-math -fgcse-lm -fgcse-sm -fsched-spec-load -fforce-addr -fsingle-precision-constant -mcpu=cortex-a7 -mtune=cortex-a7 -marm -mfpu=neon-vfpv4
 
 # Get subversion revision number, fall back to only ${MALI_RELEASE_NAME} if no svn info is available
 MALI_RELEASE_NAME=$(shell cat $(src)/.version 2> /dev/null)
