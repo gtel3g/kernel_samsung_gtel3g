@@ -43,7 +43,7 @@
 
 #define GPU_GLITCH_FREE_DFS		0
 
-#define UP_THRESHOLD			9/10
+#define UP_THRESHOLD			8/10
 
 #define GPU_HARDWARE_MIN_DIVISION	1
 #define GPU_HARDWARE_MAX_DIVISION	4
@@ -53,7 +53,7 @@
 #define DFS_FREQ_NUM			8
 
 #define GPU_MAX_FREQ			460800
-#define GPU_MIN_FREQ			64000
+#define GPU_MIN_FREQ			312000
 
 #define GPU_150M_FREQ_INDEX 	5
 #elif defined (CONFIG_ARCH_SCX35L)
