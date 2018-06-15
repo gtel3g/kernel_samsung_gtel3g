@@ -76,10 +76,10 @@ void mali_soft_job_system_destroy(struct mali_soft_job_system *system)
 {
 	MALI_DEBUG_ASSERT_POINTER(system);
 
-	if (NULL != system) {
 	/* All jobs should be free at this point. */
 	MALI_DEBUG_ASSERT(_mali_osk_list_empty(&(system->jobs_used)));
 
+	if (NULL != system) {
 		if (NULL != system->lock) {
 			_mali_osk_spinlock_irq_term(system->lock);
 		}
