@@ -168,6 +168,15 @@ int mali_mmap(struct file *filp, struct vm_area_struct *vma)
 	vma->vm_flags |= VM_DONTEXPAND;
 #endif
 
+        /* For cts_4.4_r3 security case,
+         * force read mapping fail if meet KBASE_REG_COOKIE_MTP or KBASE_REG_COOKIE_TB
+         */
+        #define KBASE_REG_COOKIE_MTP 1
+        #define KBASE_REG_COOKIE_TB  2
+        if ((vma->vm_pgoff == KBASE_REG_COOKIE_MTP) || (vma->vm_pgoff == KBASE_REG_COOKIE_TB)) {
+            vma->vm_flags &= ~(VM_READ | VM_MAYREAD);
+        }
+
 	vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
 	vma->vm_ops = &mali_kernel_vm_ops; /* Operations used on any memory system */
 
@@ -418,8 +427,15 @@ u32 _mali_kernel_memory_dump_state(char* buf, u32 size)
 
 		_mali_osk_mutex_signal(session->memory_lock);
 
-		n += _mali_osk_snprintf(buf + n, size - n, "%8d\t0x%08x\n", session->pid, sum_gl);
+		n += _mali_osk_snprintf(buf + n, size - n, "%8d \t0x%08x\n", session->pid, sum_gl);
 	}
+
+	//os alloc + free pool
+	n += _mali_osk_snprintf(buf + n, size - n, "Mali mem os\t0x%08x\n", mali_mem_os_stat() + mali_mem_os_free_stat());
+
+	//page table
+	n += _mali_osk_snprintf(buf + n, size - n, "Mali mem page\t0x%08x\n", mali_mem_page_table_stat());
+
 	mali_session_unlock();
 
 	return n;
