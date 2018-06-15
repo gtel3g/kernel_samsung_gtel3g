@@ -83,6 +83,10 @@ int gpu_level=0;
 module_param(gpu_level, int, S_IRUSR | S_IRGRP | S_IROTH); /* r-r-r-- */
 MODULE_PARM_DESC(gpu_level, "GPU gpu_level");
 
+int gpu_boost_sf_level = 0;
+module_param(gpu_boost_sf_level, int, S_IRUSR | S_IRGRP | S_IROTH); /* r-r-r-- */
+MODULE_PARM_DESC(gpu_boost_sf_level, "GPU gpu boost surfaceflinger level");
+
 extern int mali_max_job_runtime;
 module_param(mali_max_job_runtime, int, S_IRUSR | S_IWUSR | S_IWGRP | S_IRGRP | S_IROTH);
 MODULE_PARM_DESC(mali_max_job_runtime, "Maximum allowed job runtime in msecs.\nJobs will be killed after this no matter what");
@@ -468,6 +472,9 @@ static int mali_probe(struct platform_device *pdev)
 
 	MALI_DEBUG_PRINT(2, ("mali_probe(): Called for platform device %s\n", pdev->name));
 
+
+
+
 	if (NULL != mali_platform_device) {
 		/* Already connected to a device, return error */
 		MALI_PRINT_ERROR(("mali_probe(): The Mali driver is already connected with a Mali device."));
@@ -475,6 +482,11 @@ static int mali_probe(struct platform_device *pdev)
 	}
 
 	mali_platform_device = pdev;
+
+#ifdef CONFIG_64BIT   
+	static u64 mali_dma_mask = DMA_BIT_MASK(32);	
+	pdev->dev.dma_mask = &mali_dma_mask;
+#endif
 
 #ifdef CONFIG_OF
 	mali_prn_resource();
