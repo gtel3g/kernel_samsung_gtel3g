@@ -378,7 +378,7 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-delete-null-pointer-checks \
 		   -std=gnu89 \
 		   -munaligned-access \
-		   -mcpu=cortex-a7 -mtune=cortex-a7 -mfpu=neon-vfpv4
+		   -mtune=cortex-a7 -mfpu=neon-vfpv4
 
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
