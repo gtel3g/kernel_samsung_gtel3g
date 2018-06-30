@@ -436,7 +436,7 @@ struct clk_onecell_data {
 };
 struct clk *of_clk_src_onecell_get(struct of_phandle_args *clkspec, void *data);
 const char *of_clk_get_parent_name(struct device_node *np, int index);
-
+int of_clk_get_parent_count(struct device_node *np);
 void of_clk_init(const struct of_device_id *matches);
 
 #define CLK_OF_DECLARE(name, compat, fn)			\
