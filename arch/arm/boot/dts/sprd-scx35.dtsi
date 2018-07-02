@@ -380,9 +380,9 @@
 		reg = <0xf51f6000 0x1000>;
 	};
 
-	sprd_vsp@f5300000 {
+	sprd_vsp@60900000 {
 		compatible = "sprd,sprd_vsp";
-		reg = <0Xf5300000 0xc000>;
+		reg = <0X60900000 0xc000>;
 		interrupts = <0 43 0x0>;
 		clock-names = "clk_mm_i", "clk_vsp", "clk_mm_axi", "clk_parent_0", "clk_parent_1", "clk_parent_2", "clk_parent_3";
 		clocks = <&clk_mm>, <&clk_vsp>, <&clk_mm_axi>, <&clk_256m>, <&clk_192m>, <&clk_128m>, <&clk_76m8>;
