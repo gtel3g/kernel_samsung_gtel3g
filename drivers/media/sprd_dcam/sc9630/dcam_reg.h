@@ -109,6 +109,10 @@
 #define PATH1_SLICE_O_VCNT                             (DCAM_BASE + 0x00A8UL)
 #define PATH2_SLICE_O_VCNT                             (DCAM_BASE + 0x00ACUL)
 
+#define DCAM_PATH0_TRIM_START                          (DCAM_BASE + 0x00B8UL)
+#define DCAM_PATH0_TRIM_SIZE                           (DCAM_BASE + 0x00BCUL)
+#define DCAM_FRM_ADDR12                                (DCAM_BASE + 0x00C0UL)
+
 #define CAP_CCIR_CTRL                                  (DCAM_BASE + 0x0100UL)
 #define CAP_CCIR_FRM_CTRL                              (DCAM_BASE + 0x0104UL)
 #define CAP_CCIR_START                                 (DCAM_BASE + 0x0108UL)
@@ -166,10 +170,10 @@
 #define DCAM_SC_COEFF_UP_MAX                           4 // path scaling: 1/8 - 4
 #define DCAM_SC_COEFF_DOWN_MAX                         7 // path scaling: 1/8 - 4
 #define DCAM_PATH_DECI_FAC_MAX                         4 // path deci: 1/2 - 1/16
-#define DCAM_PATH1_LINE_BUF_LENGTH                     1296
-#define DCAM_PATH2_LINE_BUF_LENGTH                     2592
-#define DCAM_ISP_LINE_BUF_LENGTH                       0
-#define DCAM_SCALING_THRESHOLD                         1280
+#define DCAM_PATH1_LINE_BUF_LENGTH                     2048
+#define DCAM_PATH2_LINE_BUF_LENGTH                     4416
+#define DCAM_ISP_LINE_BUF_LENGTH                       3280
+#define DCAM_SCALING_THRESHOLD                         2048
 #define DCAM_IRQ                                       IRQ_DCAM_INT
 
 #define DCAM_PIXEL_ALIGN_WIDTH                         4

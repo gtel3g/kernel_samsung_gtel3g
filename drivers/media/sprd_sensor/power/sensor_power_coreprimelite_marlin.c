@@ -140,7 +140,7 @@ int sensor_power_on(uint32_t *fd_handle, uint32_t sensor_id, struct sensor_power
 
 	if (SENSOR_DEV_0 == sensor_id) {
 		ret = sensor_s5k4ecgx_poweron(fd_handle, dev0, dev1, dev2);
-	} else if (SENSOR_DEV_1 == sensor_id) {
+	} else {
 		ret = sensor_hi255_poweron(fd_handle, dev0, dev1, dev2);
 	}
 	return ret;
@@ -152,7 +152,7 @@ int sensor_power_off(uint32_t *fd_handle, uint32_t sensor_id, struct sensor_powe
 
 	if (SENSOR_DEV_0 == sensor_id) {
 		ret = sensor_s5k4ecgx_poweroff(fd_handle, dev0, dev1, dev2);
-	} else if (SENSOR_DEV_1 == sensor_id) {
+	} else {
 		ret = sensor_hi255_poweroff(fd_handle, dev0, dev1, dev2);
 	}
 

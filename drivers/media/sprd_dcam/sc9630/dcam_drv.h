@@ -29,7 +29,7 @@
 #define DCAM_WAIT_FOREVER                        0xFFFFFFFF
 #define DCAM_PATH_1_FRM_CNT_MAX                  8
 #define DCAM_PATH_2_FRM_CNT_MAX                  8
-#define DCAM_PATH_0_FRM_CNT_MAX                  8
+#define DCAM_PATH_0_FRM_CNT_MAX                  8    //path2 map to path0
 #define DCAM_FRM_CNT_MAX                         8  /* max between path_1_frm_cnt and path_2_frm_cnt */
 #define DCAM_HEIGHT_MIN                          4
 #define DCAM_JPEG_LENGTH_MIN                     30720 /*640X480  div 10*/
@@ -146,6 +146,9 @@ enum dcam_irq_id {
 	DCAM_RAW_SLICE_DONE,
 	DCAM_PATH1_SOF,
 	DCAM_PATH2_SOF,
+	DCAM_PATH0_END,
+	DCAM_PATH1_END,
+	DCAM_PATH2_END,
 	DCAM_IRQ_NUMBER
 };
 
@@ -218,8 +221,8 @@ enum iram_owner {
 };
 
 enum dcam_clk_sel {
-	DCAM_CLK_192M = 0,
-	DCAM_CLK_153M6,
+	DCAM_CLK_312M = 0,
+	DCAM_CLK_256M,
 	DCAM_CLK_128M,
 	DCAM_CLK_76M8,
 	DCAM_CLK_NONE
@@ -266,6 +269,8 @@ enum dcam_data_endian {
 enum dcam_output_mode {
 	DCAM_OUTPUT_WORD = 0,
 	DCAM_OUTPUT_HALF_WORD,
+	DCAM_OUTPUT_YVYU_1FRAME,
+	DCAM_OUTPUT_YUV420,
 };
 
 enum dcam_glb_reg_id {

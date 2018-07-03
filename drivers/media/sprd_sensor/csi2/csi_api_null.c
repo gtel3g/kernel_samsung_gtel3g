@@ -12,26 +12,25 @@
 #include "csi_api.h"
 #include "csi_log.h"
 
-
-static DEFINE_SPINLOCK(csi2_lock);
-
-static u32            g_csi2_irq = 0x12000034;
-static handler_t      csi_api_event_registry[MAX_EVENT] = {NULL};
-static csi2_isr_func  isr_cb = NULL;
-static void           *u_data = NULL;
-
-void csi_api_event1_handler(void *param);
-void csi_api_event2_handler(void *param);
-
-u8 csi_api_init(u32 pclk, u32 phy_id)
+void csi_api_event1_handler(int irq, void *handle);
+void csi_api_event2_handler(int irq, void *handle);
+int csi_api_malloc(void **handle)
 {
 	return ERR_NOT_COMPATIBLE;
 }
-u8 csi_api_start(void)
+
+void csi_api_free(void *handle)
+{
+}
+u8 csi_api_init(u32 bps_per_lane, u32 phy_id)
 {
 	return ERR_NOT_COMPATIBLE;
 }
-u8 csi_api_close(u32 phy_id)
+u8 csi_api_start(void *handle)
+{
+	return ERR_NOT_COMPATIBLE;
+}
+u8 csi_api_close(void *handle, u32 phy_id)
 {
 	return ERR_NOT_COMPATIBLE;
 }
@@ -52,31 +51,31 @@ csi_lane_state_t csi_api_get_lane_state(u8 lane)
 {
 	return ERR_NOT_COMPATIBLE;
 }
-u8 csi_api_register_event(csi_event_t event, u8 vc_lane, handler_t handler)
+u8 csi_api_register_event(void *handle, csi_event_t event, u8 vc_lane, handler_t handler)
 {
 	return ERR_NOT_COMPATIBLE;
 }
-u8 csi_api_unregister_event(csi_event_t event, u8 vc_lane)
+u8 csi_api_unregister_event(void *handle, csi_event_t event, u8 vc_lane)
 {
 	return ERR_NOT_COMPATIBLE;
 }
-u8 csi_api_register_line_event(u8 vc, csi_data_type_t data_type, csi_line_event_t line_event, handler_t handler)
+u8 csi_api_register_line_event(void *handle, u8 vc, csi_data_type_t data_type, csi_line_event_t line_event, handler_t handler)
 {
 	return ERR_NOT_COMPATIBLE;
 }
-u8 csi_api_unregister_line_event(u8 vc, csi_data_type_t data_type, csi_line_event_t line_event)
+u8 csi_api_unregister_line_event(void *handle, u8 vc, csi_data_type_t data_type, csi_line_event_t line_event)
 {
 	return ERR_NOT_COMPATIBLE;
 }
-void csi_api_event1_handler(void *param)
+void csi_api_event1_handler(int irq, void *handle)
 {
 	return ERR_NOT_COMPATIBLE;
 }
-void csi_api_event2_handler(void *param)
+void csi_api_event2_handler(int irq, void *handle)
 {
 	return ERR_NOT_COMPATIBLE;
 }
-u8 csi_api_unregister_all_events()
+u8 csi_api_unregister_all_events(void *handle)
 {
 	return ERR_NOT_COMPATIBLE;
 }
@@ -101,14 +100,19 @@ u32 csi_api_core_read(csi_registers_t address)
 	return ERR_NOT_COMPATIBLE;
 }
 
-int csi_reg_isr(csi2_isr_func user_func, void* user_data)
+int csi_reg_isr(void *handle, csi2_isr_func user_func, void* user_data)
 {
 	unsigned long                flag;
+	struct csi_context *csi_handle = handle;
+	if (NULL == handle) {
+		printk("handle null\n");
+		return ERR_UNDEFINED;
+	}
 
-	spin_lock_irqsave(&csi2_lock, flag);
-	isr_cb = user_func;
-	u_data = user_data;
-	spin_unlock_irqrestore(&csi2_lock, flag);
+	spin_lock_irqsave(&csi_handle->csi2_lock, flag);
+	csi_handle->isr_cb = user_func;
+	csi_handle->u_data = user_data;
+	spin_unlock_irqrestore(&csi_handle->csi2_lock, flag);
 	return 0;
 }
 

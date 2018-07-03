@@ -31,8 +31,6 @@
 #define SCALE_MINOR MISC_DYNAMIC_MINOR
 #define SC_COEFF_BUF_SIZE (24 << 10)
 
-static struct scale_k_private *s_scale_private;
-
 static void scale_k_irq(void *fd)
 {
 	struct scale_k_file *scale_file = (struct scale_k_file *)fd;
@@ -46,7 +44,7 @@ static void scale_k_irq(void *fd)
 
 	up(&scale_file->scale_done_sem);
 }
-
+/*
 struct platform_device*  scale_k_get_platform_device(void)
 {
 	struct device *dev;
@@ -59,7 +57,7 @@ struct platform_device*  scale_k_get_platform_device(void)
 
 	return to_platform_device(dev);
 }
-
+*/
 static void scale_k_file_init(struct scale_k_file *fd, struct scale_k_private *scale_private)
 {
 	fd->scale_private = scale_private;
@@ -76,10 +74,17 @@ static void scale_k_file_init(struct scale_k_file *fd, struct scale_k_private *s
 static int scale_k_open(struct inode *node, struct file *file)
 {
 	int ret = 0;
-	struct scale_k_private *scale_private = s_scale_private; //platform_get_drvdata(scale_k_get_platform_device())
+//	struct scale_k_private *scale_private = (struct scale_k_private *)scale_dev.this_device->platform_data; //platform_get_drvdata(scale_k_get_platform_device())
 	struct scale_k_file *fd = NULL;
-	struct miscdevice *md = file->private_data ;
+	struct scale_k_private *scale_private = NULL;
+	struct miscdevice *md = file->private_data;
 
+	if (!md) {
+		ret = -EFAULT;
+		printk("scale_k_open error: miscdevice is null \n");
+		goto exit;
+	}
+	scale_private = (struct scale_k_private *)md->this_device->platform_data;
 	if (!scale_private) {
 		ret = -EFAULT;
 		printk("scale_k_open error: scale_private is null \n");
@@ -92,7 +97,7 @@ static int scale_k_open(struct inode *node, struct file *file)
 		printk("scale_k_open error: alloc \n");
 		goto exit;
 	}
-	fd ->dn = md->this_device->of_node;
+	fd->dn = md->this_device->of_node;
 	scale_k_file_init(fd, scale_private);
 
 	file->private_data = fd;
@@ -210,7 +215,7 @@ static long scale_k_ioctl(struct file *file, unsigned int cmd, unsigned long arg
 
 		break;
 	case SCALE_IO_DONE:
-		ret = down_timeout(&fd->scale_done_sem, msecs_to_jiffies(5000));
+		ret = down_timeout(&fd->scale_done_sem, msecs_to_jiffies(SCALE_TIMEOUT));
 		if (ret) {
 			printk("scale_k_ioctl error:  interruptible time out\n");
 			goto ioctl_out;
@@ -221,9 +226,7 @@ static long scale_k_ioctl(struct file *file, unsigned int cmd, unsigned long arg
 		scale_k_module_dis(fd->dn);
 
 		up(&scale_private->start_sem);
-
 		break;
-
 	case SCALE_IO_CONTINUE:
 		/*Caution: slice scale is not supported by current driver.Please do not use it*/
 		ret = copy_from_user(&slice_params, (struct scale_slice_param_t *)arg, sizeof(slice_params));
@@ -285,7 +288,7 @@ int scale_k_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, scale_private);
 
-	s_scale_private = scale_private;
+//	s_scale_private = scale_private;
 
 	ret = misc_register(&scale_dev);
 	if (ret) {
@@ -293,6 +296,9 @@ int scale_k_probe(struct platform_device *pdev)
 		ret = -EACCES;
 		goto probe_out;
 	}
+
+	scale_dev.this_device->of_node = pdev->dev.of_node;
+	scale_dev.this_device->platform_data = (void *)scale_private;
 
 	goto exit;
 

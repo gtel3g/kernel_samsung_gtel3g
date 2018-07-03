@@ -169,6 +169,7 @@
 #define DCAM_PATH1_LINE_BUF_LENGTH                     2048
 #define DCAM_PATH2_LINE_BUF_LENGTH                     4096
 #define DCAM_ISP_LINE_BUF_LENGTH                       3280
+#define DCAM_SCALING_THRESHOLD                         2048
 #define DCAM_IRQ                                       IRQ_DCAM_INT
 
 #define DCAM_PIXEL_ALIGN_WIDTH                         4

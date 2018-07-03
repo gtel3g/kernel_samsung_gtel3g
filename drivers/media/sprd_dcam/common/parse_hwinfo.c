@@ -23,7 +23,7 @@
 #include <mach/board.h>
 #include <linux/sprd_iommu.h>
 #include <linux/delay.h>
-
+#include <linux/of_gpio.h>
 #include "dcam_drv.h"
 
 //#define PARSE_DEBUG
@@ -37,10 +37,10 @@
 #define  CLK_MM_I_IN_CLOCKTREE  1
 
 #ifdef CONFIG_OF
-uint32_t		dcam_regbase;
+uint32_t          dcam_regbase;
 #else
 #endif
-static atomic_t	mm_enabe_cnt = ATOMIC_INIT(0);
+static atomic_t   mm_enabe_cnt = ATOMIC_INIT(0);
 
 void   parse_baseaddress(struct device_node	*dn)
 {
@@ -140,3 +140,151 @@ int32_t clk_mm_i_eb(struct device_node *dn, uint32_t enable)
 	return 0;
 }
 
+#ifndef GPIO_SUB_SENSOR_RESET
+#define GPIO_SUB_SENSOR_RESET             0
+#endif
+
+#define GPIO_SENSOR_DEV0_PWN              GPIO_MAIN_SENSOR_PWN
+#define GPIO_SENSOR_DEV1_PWN              GPIO_SUB_SENSOR_PWN
+#define GPIO_SENSOR_DEV2_PWN              0
+#define GPIO_SENSOR_DEV0_RST              GPIO_SENSOR_RESET
+#define GPIO_SENSOR_DEV1_RST              GPIO_SUB_SENSOR_RESET
+#define GPIO_SENSOR_DEV2_RST              0
+
+int get_gpio_id(struct device_node *dn, int *pwn, int *reset, uint32_t sensor_id)
+{
+	if (NULL == pwn || NULL == reset)
+		return -1;
+
+#ifdef CONFIG_OF
+	if (0 == sensor_id) {
+		*pwn   = of_get_gpio(dn, 1);
+		*reset = of_get_gpio(dn, 0);
+	} else if (1 == sensor_id) {
+		*pwn   = of_get_gpio(dn, 3);
+		*reset = of_get_gpio(dn, 2);
+	} else {
+		*pwn   = 0;
+		*reset = 0;
+	}
+#else
+	if (0 == sensor_id) {
+		*pwn   = GPIO_SENSOR_DEV0_PWN;
+		*reset = GPIO_SENSOR_DEV0_RST;
+	} else if (1 == sensor_id) {
+		*pwn   = GPIO_SENSOR_DEV1_PWN;
+		*reset = GPIO_SENSOR_DEV1_RST;
+	} else {
+		*pwn   = GPIO_SENSOR_DEV2_PWN;
+		*reset = GPIO_SENSOR_DEV2_RST;
+	}
+#endif
+
+	return 0;
+}
+
+int get_gpio_id_ex(struct device_node *dn, int type, int *id, uint32_t sensor_id)
+{
+	if (NULL == id)
+		return -1;
+
+#ifdef CONFIG_OF
+	switch (type) {
+	case GPIO_CAMDVDD:
+		*id = of_get_gpio(dn, 4);
+		break;
+
+	default:
+		*id = 0;
+		break;
+	}
+#else
+	*id = 0;
+#endif
+
+	return 0;
+}
+
+
+#ifndef REGU_DEV0_CAMAVDD
+#define REGU_DEV0_CAMAVDD                 "vddcama"
+#endif
+#ifndef REGU_DEV1_CAMAVDD
+#define REGU_DEV1_CAMAVDD                 "vddcama"
+#endif
+#ifndef REGU_DEV2_CAMAVDD
+#define REGU_DEV2_CAMAVDD                 "vddcama"
+#endif
+#ifndef REGU_DEV0_CAMDVDD
+#define REGU_DEV0_CAMDVDD                 "vddcamd"
+#endif
+#ifndef REGU_DEV1_CAMDVDD
+#define REGU_DEV1_CAMDVDD                 "vddcamd"
+#endif
+#ifndef REGU_DEV2_CAMDVDD
+#define REGU_DEV2_CAMDVDD                 "vddcamd"
+#endif
+#ifndef REGU_DEV0_CAMIOVDD
+#define REGU_DEV0_CAMIOVDD                "vddcamio"
+#endif
+#ifndef REGU_DEV1_CAMIOVDD
+#define REGU_DEV1_CAMIOVDD                "vddcamio"
+#endif
+#ifndef REGU_DEV2_CAMIOVDD
+#define REGU_DEV2_CAMIOVDD                "vddcamio"
+#endif
+#ifndef REGU_DEV0_CAMMOT
+#define REGU_DEV0_CAMMOT                  "vddcammot"
+#endif
+#ifndef REGU_DEV1_CAMMOT
+#define REGU_DEV1_CAMMOT                  "vddcammot"
+#endif
+#ifndef REGU_DEV2_CAMMOT
+#define REGU_DEV2_CAMMOT                  "vddcammot"
+#endif
+
+const char *c_sensor_avdd_name[] = {
+						REGU_DEV0_CAMAVDD,
+						REGU_DEV1_CAMAVDD,
+						REGU_DEV2_CAMAVDD};
+
+const char *c_sensor_iovdd_name[] = {
+						REGU_DEV0_CAMIOVDD,
+						REGU_DEV1_CAMIOVDD,
+						REGU_DEV2_CAMIOVDD};
+
+const char *c_sensor_dvdd_name[] = {
+						REGU_DEV0_CAMDVDD,
+						REGU_DEV1_CAMDVDD,
+						REGU_DEV2_CAMDVDD};
+
+const char *c_sensor_mot_name[] = {
+						REGU_DEV0_CAMMOT,
+						REGU_DEV1_CAMMOT,
+						REGU_DEV2_CAMMOT};
+
+int get_regulator_name(struct device_node *dn, int type, uint32_t sensor_id, char **name)
+{
+	switch (type) {
+	case REGU_CAMAVDD:
+		*name = (char*)c_sensor_avdd_name[sensor_id];
+		break;
+
+	case REGU_CAMDVDD:
+		*name = (char*)c_sensor_dvdd_name[sensor_id];
+		break;
+
+	case REGU_CAMIOVDD:
+		*name = (char*)c_sensor_iovdd_name[sensor_id];
+		break;
+
+	case REGU_CAMMOT:
+		*name = (char*)c_sensor_mot_name[sensor_id];
+		break;
+
+	default:
+		break;
+	}
+
+	return 0;
+}

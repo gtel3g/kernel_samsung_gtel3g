@@ -22,18 +22,18 @@
 #include "../sensor_drv_sprd.h"
 
 
-int sensor_power_on(uint8_t sensor_id, struct sensor_power *main_cfg, struct sensor_power *sub_cfg)
+int sensor_power_on(uint32_t *fd_handle, uint32_t sensor_id, struct sensor_power *dev0, struct sensor_power *dev1, struct sensor_power *dev2)
 {
 	int ret = 0;
-	(void)sensor_id;(void)main_cfg;(void)sub_cfg;
+	(void)sensor_id;(void)dev0;(void)dev1;(void)dev2;
 
 	return ret;
 }
 
-int sensor_power_off(uint8_t sensor_id, struct sensor_power *main_cfg, struct sensor_power *sub_cfg)
+int sensor_power_off(uint32_t *fd_handle, uint32_t sensor_id, struct sensor_power *dev0, struct sensor_power *dev1, struct sensor_power *dev2)
 {
 	int ret = 0;
-	(void)sensor_id;(void)main_cfg;(void)sub_cfg;
+	(void)sensor_id;(void)dev0;(void)dev1;(void)dev2;
 
 
 	return ret;

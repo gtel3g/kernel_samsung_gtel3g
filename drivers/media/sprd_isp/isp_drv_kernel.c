@@ -41,9 +41,9 @@
 #include <linux/of_device.h>
 #include <linux/vmalloc.h>
 
-#if defined(CONFIG_ARCH_SCX35)
+#if IS_ENABLED(VERSION3T) || IS_ENABLED(VERSION3L)
 #include "Shark_reg_isp.h"
-#elif defined(CONFIG_ARCH_SC8825)
+#elif IS_ENABLED(VERSION2)
 #include "Tiger_reg_isp.h"
 #else
 #error "Unknown architecture specification"
@@ -61,8 +61,6 @@
 
 #define ISP_QUEUE_LENGTH 16
 #define SA_SHIRQ	IRQF_SHARED
-static uint32_t                    g_isp_irq = 0x12345678;/*for share irq handler function*/
-//static uint32_t                    g_dcam_irq = 0x12345678;/*for share irq handler function*/
 
 #define ISP_MINOR		MISC_DYNAMIC_MINOR/*isp minor number*/
 #define init_MUTEX(sem)		sema_init(sem, 1)
@@ -92,17 +90,17 @@ static uint32_t                    g_isp_irq = 0x12345678;/*for share irq handle
 		if (ISP_ADDR_INVALID(a)) {                       \
 			printk("isp_k, zero pointer \n");           \
 			printk(DEBUG_STR, DEBUG_ARGS);               \
-			return;                                      \
+			return -EFAULT;                                      \
 		}                                                   \
 	} while(0)
 
 #define ISP_DCAM_IRQ_MASK	0x03
 #define ISP_DCAM_IRQ_NUM	0x02
-#if defined(CONFIG_ARCH_SC8825)
+#if IS_ENABLED(VERSION2)
 #define ISP_BUF_MAX_SIZE ISP_TMP_BUF_SIZE_MAX_V0000
 #define ISP_IRQ_NUM ISP_IRQ_NUM_V0000
 #define ISP_IRQ_HW_MASK ISP_IRQ_HW_MASK_V0000
-#elif defined(CONFIG_ARCH_SCX35)
+#elif IS_ENABLED(VERSION3L) || IS_ENABLED(VERSION3T)
 #define ISP_BUF_MAX_SIZE ISP_TMP_BUF_SIZE_MAX_V0001
 #define ISP_IRQ_NUM ISP_IRQ_NUM_V0001
 #define ISP_IRQ_HW_MASK ISP_IRQ_HW_MASK_V0001
@@ -120,7 +118,7 @@ struct isp_queue {
 	struct isp_node 	*read;
 };
 
-struct isp_device_t
+struct isp_k_file
 {
 	uint32_t reg_base_addr;/*the pointer of isp register context*/
 	uint32_t size;/* struct size*/
@@ -131,26 +129,29 @@ struct isp_device_t
 	struct semaphore sem_isp;/*for the isp device, protect the isp hardware; protect  only  one caller use the oi*/ 
 				/*controll/read/write functions*/
 	struct clk* s_isp_clk_mm_i;
-	struct clk              *s_isp_clk;
+	struct clk* s_isp_clk;
+	atomic_t s_isp_users;
+	unsigned long s_isp_alloc_addr;
+	unsigned long s_isp_alloc_order;
+	unsigned long s_isp_alloc_len;
+	struct mutex s_isp_lock;
+	spinlock_t isp_spin_lock;
 };
 
-static atomic_t s_isp_users = ATOMIC_INIT(0);
-static struct mutex s_isp_lock;	/*for the isp driver, protect the isp module; protect only one user open this module*/
-static struct proc_dir_entry*  isp_proc_file;
-static struct isp_device_t *g_isp_dev_ptr = NULL;
+struct isp_buf_phy {
+	unsigned long buf_phy_ptr;
+	unsigned long buf_vir_ptr;
+	unsigned long buf_len;
+};
 
 uint32_t s_dcam_int_eb = 0x00;
-uint32_t s_isp_alloc_addr = 0x00;
-uint32_t s_isp_alloc_order = 0x00;
-uint32_t s_isp_alloc_len = 0x00;
 
-static DEFINE_SPINLOCK(isp_spin_lock);
-static int32_t _isp_set_clk(enum isp_clk_sel clk_sel);
-static int32_t _isp_module_eb(void);
-static int32_t _isp_module_dis(void);
-static int  _isp_registerirq(void);
-static void _isp_unregisterirq(void);
-static irqreturn_t _isp_irq_root(int irq, void *dev_id);
+static int32_t _isp_set_clk(void *handle, enum isp_clk_sel clk_sel);
+static int32_t _isp_module_eb(void *handle);
+static int32_t _isp_module_dis(void *handle);
+static int  _isp_registerirq(void *handle);
+static void _isp_unregisterirq(void *handle);
+static irqreturn_t _isp_irq_root(int irq, void *handle);
 void _dcam_isp_root(void);
 static int _isp_queue_init(struct isp_queue *queue);
 static int _isp_queue_write(struct isp_queue *queue, struct isp_node *node);
@@ -199,17 +200,21 @@ static struct platform_driver isp_driver = {
 	},
 };
 
-static int32_t _isp_module_eb(void)
+static int32_t _isp_module_eb(void *handle)
 {
 	int32_t ret = 0;
-
-	if (0x01 == atomic_inc_return(&s_isp_users)) {
+	struct isp_k_file *fd = (struct isp_k_file*)handle;
+	if (NULL == handle) {
+		ISP_PRINT("_isp_module_eb handle null\n");
+		return -ENOENT;
+	}
+	if (0x01 == atomic_inc_return(&fd->s_isp_users)) {
 
 		ret = clk_mm_i_eb(isp_dev.this_device->of_node,1);
-#if defined(CONFIG_ARCH_SCX30G)
-		ret = _isp_set_clk(ISP_CLK_312M);
+#if IS_ENABLED(VERSION3L) || IS_ENABLED(VERSION3T)
+		ret = _isp_set_clk(fd, ISP_CLK_312M);
 #else
-		ret = _isp_set_clk(ISP_CLK_256M);
+		ret = _isp_set_clk(fd, ISP_CLK_256M);
 #endif
 		if (unlikely(0 != ret)) {
 			ISP_PRINT("isp_k: set clock error\n");
@@ -222,31 +227,40 @@ static int32_t _isp_module_eb(void)
 	return ret;
 }
 
-static int32_t _isp_module_dis(void)
+static int32_t _isp_module_dis(void *handle)
 {
 	int32_t	ret = 0;
+	struct isp_k_file *fd = (struct isp_k_file*)handle;
+	if (NULL == handle) {
+		ISP_PRINT("_isp_module_eb handle null\n");
+		return -ENOENT;
+	}
+	if (0x00 == atomic_dec_return(&fd->s_isp_users)) {
 
-	if (0x00 == atomic_dec_return(&s_isp_users)) {
-
-		ret = _isp_set_clk(ISP_CLK_NONE);
+		ret = _isp_set_clk(fd, ISP_CLK_NONE);
 		if (unlikely(0 != ret)) {
 			ISP_PRINT("isp_k: close clock error\n");
 			ret = -EFAULT;
+			return ret;
 		}
 		ret =  clk_mm_i_eb(isp_dev.this_device->of_node,0);
 	}
 	return ret;
 }
 
-static int32_t _isp_module_rst(void)
+static int32_t _isp_module_rst(void *handle)
 {
 	int32_t ret = 0;
 	uint32_t reg_value=0x00;
 	int32_t time_out_cnt = 0;
+	struct isp_k_file *fd = (struct isp_k_file*)handle;
+	if (NULL == handle) {
+		ISP_PRINT("_isp_module_eb handle null\n");
+		return -ENOENT;
+	}
+	if (0x00 != atomic_read(&fd->s_isp_users)) {
 
-	if (0x00 != atomic_read(&s_isp_users)) {
-
-#if defined(CONFIG_ARCH_SCX35)
+#if IS_ENABLED(VERSION3L) || IS_ENABLED(VERSION3T)
 		ISP_OWR(ISP_AXI_MASTER_STOP, BIT_0);
 #endif
 		reg_value=ISP_READL(ISP_AXI_MASTER);
@@ -263,7 +277,7 @@ static int32_t _isp_module_rst(void)
 
 		ISP_WRITEL(ISP_INT_CLEAR, ISP_IRQ_HW_MASK);
 
-#if defined(CONFIG_ARCH_SCX35)
+#if IS_ENABLED(VERSION3L) || IS_ENABLED(VERSION3T)
 		sci_glb_set(ISP_MODULE_RESET, ISP_RST_LOG_BIT);
 		sci_glb_set(ISP_MODULE_RESET, ISP_RST_CFG_BIT);
 		sci_glb_set(ISP_MODULE_RESET, ISP_RST_LOG_BIT);
@@ -273,7 +287,7 @@ static int32_t _isp_module_rst(void)
 
 		sci_glb_clr(ISP_MODULE_RESET, ISP_RST_CFG_BIT);
 		sci_glb_clr(ISP_MODULE_RESET, ISP_RST_LOG_BIT);
-#elif defined(CONFIG_ARCH_SC8825)
+#elif IS_ENABLED(VERSION2)
 		sci_glb_set(ISP_MODULE_RESET, ISP_RST_BIT);
 		sci_glb_set(ISP_MODULE_RESET, ISP_RST_BIT);
 		sci_glb_set(ISP_MODULE_RESET, ISP_RST_BIT);
@@ -290,21 +304,25 @@ static int32_t _isp_module_rst(void)
 	return ret;
 }
 
-static int32_t _isp_lnc_param_load(struct isp_reg_bits *reg_bits_ptr, uint32_t counts)
+static int32_t _isp_lnc_param_load(void *handle, struct isp_reg_bits *reg_bits_ptr, uint32_t counts)
 {
 	int32_t ret = 0;
 	int32_t time_out_cnt = 0;
 	uint32_t reg_value=0x00;
+	struct isp_k_file *fd = (struct isp_k_file*)handle;
+	if (NULL == handle) {
+		ISP_PRINT("_isp_module_eb handle null\n");
+		return -ENOENT;
+	}
+	if((0x00 != fd->s_isp_alloc_addr)
+		&&(0x00 != fd->s_isp_alloc_len)) {
 
-	if((0x00!=s_isp_alloc_addr)
-		&&(0x00!=s_isp_alloc_len)) {
-
-		void *ptr = (void*)s_isp_alloc_addr;
-		uint32_t len=s_isp_alloc_len;
+		void *ptr = (void*)fd->s_isp_alloc_addr;
+		uint32_t len = fd->s_isp_alloc_len;
 		dmac_flush_range(ptr, ptr + len);
 		outer_flush_range(__pa(ptr), __pa(ptr) + len);
 
-		reg_bits_ptr->reg_value=(uint32_t)__pa(reg_bits_ptr->reg_value);
+		reg_bits_ptr->reg_value = (uint32_t)__pa(reg_bits_ptr->reg_value);
 #if defined(CONFIG_MACH_CORE3)
 		{
 			unsigned long flags;
@@ -330,8 +348,8 @@ static int32_t _isp_lnc_param_load(struct isp_reg_bits *reg_bits_ptr, uint32_t c
 #endif
 		reg_value=ISP_READL(ISP_INT_RAW);
 
-		while((0x00==(reg_value&ISP_INT_LENS_LOAD)) && (time_out_cnt < ISP_TIME_OUT_MAX)) {
-			msleep(1);
+		while ((0x00 == (reg_value&ISP_INT_LENS_LOAD)) && (time_out_cnt < ISP_TIME_OUT_MAX)) {
+			udelay(1);
 			reg_value=ISP_READL(ISP_INT_RAW);
 			time_out_cnt++;
 		}
@@ -347,73 +365,49 @@ static int32_t _isp_lnc_param_load(struct isp_reg_bits *reg_bits_ptr, uint32_t c
 	return ret;
 }
 
-static int32_t _isp_lnc_param_set(uint32_t* addr, uint32_t len)
+static int32_t _isp_lnc_param_set(void *handle, uint32_t* addr, uint32_t len)
 {
 	int32_t ret = 0;
-
-	if((0x00!=s_isp_alloc_addr)
+	struct isp_k_file *fd = (struct isp_k_file*)handle;
+	if (NULL == handle) {
+		ISP_PRINT("_isp_module_eb handle null\n");
+		return -ENOENT;
+	}
+	if((0x00 != fd->s_isp_alloc_addr)
 		&&(0x00!=addr)) {
-		memcpy((void*)s_isp_alloc_addr, (void*)addr, len);
+		memcpy((void*)fd->s_isp_alloc_addr, (void*)addr, len);
 	}
 
 	return ret;
 }
 
-static int32_t _isp_free(void)
+static int32_t _isp_update(void *handle)
 {
 	int32_t ret = 0;
-
-	if((0x00!=s_isp_alloc_addr)
-		&&(0x00!=s_isp_alloc_order)) {
-		free_pages(s_isp_alloc_addr, s_isp_alloc_order);
-		s_isp_alloc_order = 0x00;
-		s_isp_alloc_addr = 0x00;
-		s_isp_alloc_len=0x00;
+	struct isp_k_file *fd = (struct isp_k_file*)handle;
+	if (NULL == handle) {
+		ISP_PRINT("_isp_module_eb handle null\n");
+		return -ENOENT;
+	}
+	if((0x00 != fd->s_isp_alloc_addr)
+		&&(0x00 != fd->s_isp_alloc_order)) {
+		fd->s_isp_alloc_order = 0x00;
+		fd->s_isp_alloc_addr = 0x00;
+		fd->s_isp_alloc_len=0x00;
 	}
 
 	return ret;
 }
 
-static int32_t _isp_alloc(uint32_t* addr, uint32_t len)
-{
-	int32_t ret = 0x00;
-	uint32_t buf=0x00;
-	void *ptr = 0x00;
-
-	if((0x00!=s_isp_alloc_addr)
-		&&(len<=s_isp_alloc_len)) {
-		*addr = s_isp_alloc_addr;
-	} else {
-		_isp_free();
-	}
-
-	if(0x00==s_isp_alloc_addr) {
-		s_isp_alloc_len=len;
-		s_isp_alloc_order = get_order(len);
-		s_isp_alloc_addr = (uint32_t)__get_free_pages(GFP_KERNEL | __GFP_COMP, s_isp_alloc_order);
-		if (NULL == (void*)s_isp_alloc_addr) {
-			ISP_PRINT("ISP_RAW:_isp_alloc order:0x%x, addr:0x%x, len:0x%x error\n", s_isp_alloc_order, s_isp_alloc_addr, s_isp_alloc_len);
-			return 1;
-		}
-		ptr = (void*)s_isp_alloc_addr;
-		*addr = s_isp_alloc_addr;
-		buf = virt_to_phys((volatile void *)s_isp_alloc_addr);
-		dmac_flush_range(ptr, ptr + len);
-		outer_flush_range(__pa(ptr), __pa(ptr) + len);
-	}
-
-	return ret;
-}
-
-static int32_t _isp_set_clk(enum isp_clk_sel clk_sel)
+static int32_t _isp_set_clk(void *handle, enum isp_clk_sel clk_sel)
 {
 	struct clk              *clk_parent;
 	char                    *parent = "clk_256m";
 	int32_t       rtn = 0;
+	struct isp_k_file *fd = (struct isp_k_file*)handle;
+	ISP_CHECK_ZERO(fd);
 
-	ISP_CHECK_ZERO(g_isp_dev_ptr);
-
-#if defined(CONFIG_ARCH_SCX35)
+#if IS_ENABLED(VERSION3L) || IS_ENABLED(VERSION3T)
 	switch (clk_sel) {
 	case ISP_CLK_312M:
 		parent = "clk_312m";
@@ -432,11 +426,11 @@ static int32_t _isp_set_clk(enum isp_clk_sel clk_sel)
 		break;
 
 	case ISP_CLK_NONE:
-		ISP_PRINT("isp_k: ISP close CLK %d \n", (int)clk_get_rate(g_isp_dev_ptr->s_isp_clk));
-		if (g_isp_dev_ptr->s_isp_clk) {
-			clk_disable(g_isp_dev_ptr->s_isp_clk);
-			clk_put(g_isp_dev_ptr->s_isp_clk);
-			g_isp_dev_ptr->s_isp_clk = NULL;
+		ISP_PRINT("isp_k: ISP close CLK %d \n", (int)clk_get_rate(fd->s_isp_clk));
+		if (fd->s_isp_clk) {
+			clk_disable(fd->s_isp_clk);
+			clk_put(fd->s_isp_clk);
+			fd->s_isp_clk = NULL;
 		}
 		return 0;
 	default:
@@ -444,16 +438,16 @@ static int32_t _isp_set_clk(enum isp_clk_sel clk_sel)
 		break;
 	}
 
-	if (NULL == g_isp_dev_ptr->s_isp_clk) {
-		g_isp_dev_ptr->s_isp_clk = clk_get(NULL, "clk_isp");
-		if (IS_ERR(g_isp_dev_ptr->s_isp_clk)) {
-			ISP_PRINT("isp_k: clk_get fail, %d \n", (int)g_isp_dev_ptr->s_isp_clk);
+	if (NULL == fd->s_isp_clk) {
+		fd->s_isp_clk = parse_clk(isp_dev.this_device->of_node, "clk_isp");
+		if (IS_ERR(fd->s_isp_clk)) {
+			ISP_PRINT("isp_k: parse_clk fail, %d \n", (int)fd->s_isp_clk);
 			return -1;
 		} else {
 			ISP_PRINT("isp_k: get clk_parent ok \n");
 		}
 	} else {
-		clk_disable(g_isp_dev_ptr->s_isp_clk);
+		clk_disable(fd->s_isp_clk);
 	}
 
 	clk_parent = clk_get(NULL, parent);
@@ -464,12 +458,12 @@ static int32_t _isp_set_clk(enum isp_clk_sel clk_sel)
 		ISP_PRINT("isp_k: get clk_parent ok \n");
 	}
 
-	rtn = clk_set_parent(g_isp_dev_ptr->s_isp_clk, clk_parent);
+	rtn = clk_set_parent(fd->s_isp_clk, clk_parent);
 	if(rtn){
 		ISP_PRINT("isp_k: clk_set_parent fail, %d \n", rtn);
 	}
 
-	rtn = clk_enable(g_isp_dev_ptr->s_isp_clk);
+	rtn = clk_enable(fd->s_isp_clk);
 	if (rtn) {
 		ISP_PRINT("isp_k: enable isp clk error.\n");
 		return -1;
@@ -592,7 +586,7 @@ static inline void _isp_regwrite(char *dst,  char *src, size_t n)
 }
 static int32_t _isp_get_ctlr(void *param)
 {
-	struct isp_device_t *dev_ptr = (struct isp_device_t *) param;
+	struct isp_k_file *dev_ptr = (struct isp_k_file *) param;
 
 	down(&dev_ptr->sem_isp);
 
@@ -600,7 +594,7 @@ static int32_t _isp_get_ctlr(void *param)
 }
 static int32_t _isp_put_ctlr(void *param)
 {
-	struct isp_device_t *dev_ptr = (struct isp_device_t *) param;
+	struct isp_k_file *dev_ptr = (struct isp_k_file *) param;
 
 	up(&dev_ptr->sem_isp);
 
@@ -617,17 +611,22 @@ static int _isp_en_irq(unsigned long int_num)
 	return ret;
 }
 
-static int _isp_registerirq(void)
+static int _isp_registerirq(void *handle)
 {
 	uint32_t ret = 0;
+	struct isp_k_file *fd = (struct isp_k_file*)handle;
+	if (NULL == handle) {
+		ISP_PRINT("_isp_module_eb handle null\n");
+		return -ENOENT;
+	}
 
-	ret = request_irq(ISP_IRQ, _isp_irq_root, IRQF_SHARED, "ISP", &g_isp_irq);
+	ret = request_irq(ISP_IRQ, _isp_irq_root, IRQF_SHARED, "ISP", fd);
 
 	return ret;
 }
-static void _isp_unregisterirq(void)
+static void _isp_unregisterirq(void *handle)
 {
-	free_irq (ISP_IRQ, &g_isp_irq);
+	free_irq (ISP_IRQ, handle);
 }
 
 static int _isp_cfg_dcam_int(uint32_t param)
@@ -672,53 +671,96 @@ static void _write_reg(struct isp_reg_bits *reg_bits_ptr, uint32_t counts)
 static int32_t _isp_kernel_open (struct inode *node, struct file *pf)
 {
 	int32_t ret = 0;
+	uint32_t addr = 0;
+	struct isp_k_file *fd = NULL;
+	struct miscdevice *md = pf->private_data;
+	struct isp_buf_phy *isp_buf = NULL;
 	ISP_PRINT ("isp_k: open start \n");
 
-	ISP_CHECK_ZERO(g_isp_dev_ptr);
+	fd = (struct isp_k_file*)vzalloc(sizeof(struct isp_k_file));
+	ISP_CHECK_ZERO(fd);
+	atomic_set(&fd->s_isp_users, 0);
+	mutex_init(&fd->s_isp_lock);
+	init_MUTEX(&fd->sem_isp);
+	init_MUTEX_LOCKED(&fd->sem_isr); /*for interrupt */
+	spin_lock_init(&fd->isp_spin_lock);
+	isp_buf = (struct isp_buf_phy*)md->this_device->platform_data;
+	if (!isp_buf) {
+		ret = -EFAULT;
+		printk("isp_kernel_open fail isp_buf NULL \n");
+		goto exit;
+	}
 
-	ret =  _isp_get_ctlr(g_isp_dev_ptr);
+	fd->s_isp_alloc_addr = isp_buf->buf_vir_ptr;
+	fd->s_isp_alloc_len = isp_buf->buf_len;
+	fd->s_isp_alloc_order = get_order(isp_buf->buf_len);
+	fd->s_isp_clk = NULL;
+	fd->s_isp_clk_mm_i = NULL;
+	fd->buf_addr = 0;
+	fd->buf_len = 0;
+
+	fd->buf_addr = (uint32_t)vzalloc(ISP_BUF_MAX_SIZE);
+	if (0 == fd->buf_addr) {
+		ret = -1;
+		ISP_PRINT ("isp_kernel_init 1: alloc  error \n");
+		goto ISP_K_OPEN_ERROR_EXIT1;
+	}
+	fd->buf_len = ISP_BUF_MAX_SIZE;
+
+	ret =  _isp_get_ctlr(fd);
 	if (unlikely(ret)) {
 		ISP_PRINT ("isp_k: get control error \n");
 		ret = -EFAULT;
 		return ret;
 	}
 
-	g_isp_dev_ptr->reg_base_addr = (uint32_t)ISP_BASE_ADDR;
-	g_isp_dev_ptr->size = ISP_REG_MAX_SIZE;
+	fd->reg_base_addr = (uint32_t)ISP_BASE_ADDR;
+	fd->size = ISP_REG_MAX_SIZE;
 
-	ret = _isp_module_eb();
+	ret = _isp_module_eb(fd);
 	if (unlikely(0 != ret)) {
 		ISP_PRINT("isp_k: enable isp module error\n");
 		ret = -EIO;
-		goto ISP_K_OPEN_ERROR_EXIT;
+		goto ISP_K_OPEN_ERROR_EXIT2;
 	}
 
-	ret = _isp_module_rst();
+	ret = _isp_module_rst(fd);
 	if (unlikely(0 != ret)) {
 		ISP_PRINT("isp_k: reset isp module error \n");
 		ret = -EIO;
-		goto ISP_K_OPEN_ERROR_EXIT;
+		goto ISP_K_OPEN_ERROR_EXIT2;
 	}
 
-	ret = _isp_registerirq();
-	ISP_PRINT ("isp_k: base addr = 0x%x, size = %d \n", g_isp_dev_ptr->reg_base_addr,
-			g_isp_dev_ptr->size);
+	ret = _isp_registerirq(fd);
+	ISP_PRINT ("isp_k: base addr = 0x%x, size = %d \n", fd->reg_base_addr,
+			fd->size);
 
-	ret = _isp_queue_init(&(g_isp_dev_ptr->queue));
-
+	ret = _isp_queue_init(&(fd->queue));
+	pf->private_data = fd;
 	ISP_PRINT ("isp_k: open end \n");
+
 	return ret;
 
-ISP_K_OPEN_ERROR_EXIT:
-	ret =  _isp_put_ctlr(g_isp_dev_ptr);
-	if (unlikely(ret)) {
-		ISP_PRINT ("isp_k: get control error \n");
-		ret = -EFAULT;
+ISP_K_OPEN_ERROR_EXIT2:
+	 _isp_put_ctlr(fd);
+ISP_K_OPEN_ERROR_EXIT1:
+	_isp_update(fd);
+	if (fd->buf_addr) {
+		vfree((void *)fd->buf_addr);
+		fd->buf_addr = 0;
+		fd->buf_len = 0;
 	}
+
+exit:
+	if (fd) {
+		vfree(fd);
+		fd = 0;
+	}
+
 	return ret;
 }
 
-static irqreturn_t _isp_irq_root(int irq, void *dev_id)
+static irqreturn_t _isp_irq_root(int irq, void *handle)
 {
 	int32_t	    ret = 0;
 	uint32_t	status = 0;
@@ -727,6 +769,11 @@ static irqreturn_t _isp_irq_root(int irq, void *dev_id)
 	unsigned long flag = 0;
 	int32_t     i = 0;
 	struct isp_node    node = { 0 };
+	struct isp_k_file *fd = (struct isp_k_file*)handle;
+	if (NULL == handle) {
+		ISP_PRINT("_isp_module_eb handle null\n");
+		return -ENOENT;
+	}
 
 	status = ISP_REG_RD(ISP_INT_STATUS);
 	irq_line = status&ISP_IRQ_HW_MASK;
@@ -735,7 +782,7 @@ static irqreturn_t _isp_irq_root(int irq, void *dev_id)
 		return IRQ_NONE;
 	}
 
-	spin_lock_irqsave(&isp_spin_lock,flag);
+	spin_lock_irqsave(&fd->isp_spin_lock,flag);
 	for (i = ISP_IRQ_NUM- 1; i >= 0; i--) {
 		if (irq_line & (1 << (uint32_t)i)) {
 		irq_status |= 1 << (uint32_t)i;
@@ -747,12 +794,13 @@ static irqreturn_t _isp_irq_root(int irq, void *dev_id)
 
 	node.isp_irq_val = irq_status;
 	ISP_WRITEL(ISP_INT_CLEAR, irq_status);
-	ret = _isp_queue_write((struct isp_queue *)&g_isp_dev_ptr->queue, (struct isp_node*)&node);
-	spin_unlock_irqrestore(&isp_spin_lock, flag);
-	up(&g_isp_dev_ptr->sem_isr);
+	ret = _isp_queue_write((struct isp_queue *)&fd->queue, (struct isp_node*)&node);
+	spin_unlock_irqrestore(&fd->isp_spin_lock, flag);
+	up(&fd->sem_isr);
 
 	return IRQ_HANDLED;
 }
+/*
 //static irqreturn_t _dcam_irq_root(int irq, void *dev_id)
 void _dcam_isp_root(void)
 {
@@ -779,7 +827,7 @@ void _dcam_isp_root(void)
 
 	//return IRQ_HANDLED;
 }
-
+*/
 /**********************************************************
 *release the device
 *
@@ -787,21 +835,34 @@ void _dcam_isp_root(void)
 static int32_t _isp_kernel_release (struct inode *node, struct file *pf)
 {
 	int ret = 0;
+	struct isp_k_file *fd = NULL;
+
 	ISP_PRINT ("isp_k: release start \n");
+	fd = (struct isp_k_file *)pf->private_data;
+	ISP_CHECK_ZERO(fd);
+	mutex_lock(&fd->s_isp_lock);
 
-	mutex_lock(&s_isp_lock);
+	_isp_unregisterirq(fd);
+	ret = _isp_module_dis(fd);
 
-	_isp_unregisterirq();
-	ret = _isp_module_dis();
+	mutex_unlock(&fd->s_isp_lock);
 
-	mutex_unlock(&s_isp_lock);
-
-	ISP_CHECK_ZERO(g_isp_dev_ptr);
-	ret = _isp_put_ctlr(g_isp_dev_ptr);
+	ret = _isp_put_ctlr(fd);
 	if (unlikely (ret) ) {
 		ISP_PRINT ("isp_k: release control error \n");
 		return -EFAULT;
 	}
+
+	mutex_destroy(&fd->s_isp_lock);
+	_isp_update(fd);
+	ISP_CHECK_ZERO_VOID(fd);
+	if (fd->buf_addr) {
+		vfree((void *)fd->buf_addr);
+		fd->buf_addr = 0;
+		fd->buf_len = 0;
+	}
+	vfree(fd);
+	fd = NULL;
 	ISP_PRINT ("isp_k: release end \n");
 	return ret;
 }
@@ -850,7 +911,7 @@ static int32_t _isp_kernel_proc_read (char *page, char **start, off_t off, int c
 *unsigned int cmd:
 *unsigned long param:
 ***********************************************************/
-static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long param)
+static long _isp_kernel_ioctl(struct file *fl, unsigned int cmd, unsigned long param)
 {
 	long ret = 0;
 	uint32_t isp_irq, dcam_irq;
@@ -858,30 +919,30 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 	struct isp_node isp_node = { 0 };
 	struct isp_reg_param reg_param = { 0 };
 	struct isp_reg_bits *reg_bits_ptr = 0;
-
+	struct isp_k_file *fd = NULL;
 	//ISP_PRINT("isp_k:_ioctl called, cmd: %x\n", cmd);
 
 	if (!fl) {
 		return -EINVAL;
 	}
-
-	ISP_CHECK_ZERO(g_isp_dev_ptr);
+	fd = fl->private_data;
+	ISP_CHECK_ZERO(fd);
 
 	if(ISP_IO_IRQ==cmd)
 	{
-		ret = down_interruptible(&g_isp_dev_ptr->sem_isr);
+		ret = down_interruptible(&fd->sem_isr);
 		if (ret) {
-			ISP_PRINT("isp_k: ioctl irq: down failed ret = %d",ret);
+			ISP_PRINT("isp_k: ioctl irq: down failed ret = %ld",ret);
 			memset(&irq_param, 0, sizeof(irq_param));
 			irq_param.ret_val = ret;
 			ret = copy_to_user ((void*) param, (void*)&irq_param, sizeof(irq_param));
 			if ( 0 != ret) {
-				ISP_PRINT("isp_k: ioctl irq: copy_to_user failed ret = %d", ret);
+				ISP_PRINT("isp_k: ioctl irq: copy_to_user failed ret = %ld", ret);
 			}
 			ret = -ERESTARTSYS;
 			goto ISP_IOCTL_EXIT;
 		}
-		ret=_isp_queue_read(&g_isp_dev_ptr->queue, &isp_node);
+		ret=_isp_queue_read(&fd->queue, &isp_node);
 		if ( 0 != ret) {
 
 			ISP_PRINT("isp_k: ioctl irq: _isp_queue_read error, ret = 0x%x", (uint32_t)ret);
@@ -903,12 +964,12 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 
 	} else {
 
-		mutex_lock(&s_isp_lock);
+		mutex_lock(&fd->s_isp_lock);
 
 		switch (cmd)
 		{
 			case ISP_IO_READ: {
-			unsigned long buf_size = 0;
+			uint32_t buf_size = 0;
 			//ISP_PRINT("  isp_k:_ioctl read called \n");
 			ret = copy_from_user((void*)&reg_param, (void*)param, sizeof(struct isp_reg_param));
 			if ( 0 != ret) {
@@ -918,11 +979,11 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 				goto IO_READ_EXIT;
 			}
 			buf_size = reg_param.counts*sizeof(struct isp_reg_bits);
-			if (buf_size > g_isp_dev_ptr->buf_len) {
+			if (buf_size > fd->buf_len) {
 				ret  =-EFAULT;
 				goto IO_READ_EXIT;
 			}
-			reg_bits_ptr = (struct isp_reg_bits*) g_isp_dev_ptr->buf_addr;
+			reg_bits_ptr = (struct isp_reg_bits*) fd->buf_addr;
 			ret = copy_from_user((void*)reg_bits_ptr, (void*)reg_param.reg_param, buf_size);
 			if ( 0 != ret) {
 
@@ -941,7 +1002,7 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 			}
 			IO_READ_EXIT:
 			if(reg_bits_ptr) {
-				memset((void *)g_isp_dev_ptr->buf_addr, 0x00, buf_size);
+				memset((void *)fd->buf_addr, 0x00, buf_size);
 				reg_bits_ptr = NULL;
 			}
 			}
@@ -958,12 +1019,12 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 				goto IO_WRITE_EXIT;
 			}
 			buf_size = reg_param.counts*sizeof(struct isp_reg_bits);
-			if(buf_size > g_isp_dev_ptr->buf_len)
+			if(buf_size > fd->buf_len)
 			{
 				ret = -EFAULT;
 				goto IO_WRITE_EXIT;
 			}
-			reg_bits_ptr = (struct isp_reg_bits*) g_isp_dev_ptr->buf_addr;
+			reg_bits_ptr = (struct isp_reg_bits*) fd->buf_addr;
 
 			ret = copy_from_user((void*)reg_bits_ptr, (void*)reg_param.reg_param, buf_size);
 			if ( 0 != ret) {
@@ -976,7 +1037,7 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 
 			IO_WRITE_EXIT:
 			if(reg_bits_ptr) {
-				memset((void *)g_isp_dev_ptr->buf_addr, 0x00, buf_size);
+				memset((void *)fd->buf_addr, 0x00, buf_size);
 				reg_bits_ptr = NULL;
 			}
 
@@ -985,7 +1046,7 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 
 			case ISP_IO_RST: {
 			ISP_PRINT(" isp_k:ioctl restet start \n");
-			ret = _isp_module_rst();
+			ret = _isp_module_rst(fd);
 			if (ret) {
 
 				ISP_PRINT("isp_k: ioctl restet error!\n");
@@ -996,12 +1057,6 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 
 			case ISP_IO_SETCLK: {
 			ISP_PRINT(" isp_k:ioctl set clock start \n");
-			//ret = _isp_set_clk(ISP_CLK_xxx);
-			if (ret) {
-
-				ISP_PRINT("isp_k: ioctl set clock error!\n");
-				ret = -EFAULT;
-			}
 			}
 			break;
 
@@ -1010,11 +1065,11 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 			struct isp_node node = { 0 };
 			ret = _isp_en_irq(0);//dis-enable the interrupt
 			ISP_PRINT("isp_k: ioctl  stop start !\n");
-			spin_lock_irqsave(&isp_spin_lock,flag);
+			spin_lock_irqsave(&fd->isp_spin_lock,flag);
 			node.dcam_irq_val = ISP_INT_STOP;
-			ret = _isp_queue_write((struct isp_queue *)&g_isp_dev_ptr->queue, (struct isp_node*)&node);
-			spin_unlock_irqrestore(&isp_spin_lock, flag);
-			up(&g_isp_dev_ptr->sem_isr);
+			ret = _isp_queue_write((struct isp_queue *)&fd->queue, (struct isp_node*)&node);
+			spin_unlock_irqrestore(&fd->isp_spin_lock, flag);
+			up(&fd->sem_isr);
 			}
 			break;
 
@@ -1062,12 +1117,12 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 					goto IO_LNC_PARAM_EXIT;
 				}
 				buf_size = reg_param.counts;
-				if(buf_size > g_isp_dev_ptr->buf_len){
+				if(buf_size > fd->buf_len){
 
 					ret = -EFAULT;
 					goto IO_LNC_PARAM_EXIT;
 				}
-				addr = (uint32_t*) g_isp_dev_ptr->buf_addr;
+				addr = (uint32_t*) fd->buf_addr;
 				ret = copy_from_user((void*)addr, (void*)reg_param.reg_param, buf_size);
 				if ( 0 != ret) {
 
@@ -1075,7 +1130,7 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 					ret = -EFAULT;
 					goto IO_LNC_PARAM_EXIT;
 				}
-				ret = _isp_lnc_param_set(addr, buf_size);
+				ret = _isp_lnc_param_set(fd, addr, buf_size);
 				if ( 0 != ret) {
 					ISP_PRINT("isp_k: ioctl lnc param error, ret = 0x%x", (uint32_t)ret);
 					ret = -EFAULT;
@@ -1084,7 +1139,7 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 
 				IO_LNC_PARAM_EXIT:
 				if(addr) {
-					memset((void *)g_isp_dev_ptr->buf_addr, 0x00, buf_size);
+					memset((void *)fd->buf_addr, 0x00, buf_size);
 					addr = NULL;
 				}
 			}
@@ -1099,13 +1154,13 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 					goto IO_LNC_EXIT;
 				}
 				buf_size = reg_param.counts*sizeof(struct isp_reg_bits);
-				if(buf_size > g_isp_dev_ptr->buf_len)
+				if(buf_size > fd->buf_len)
 				{
 					ret = -EFAULT;
 					ISP_PRINT("isp_k: isp_io_lnc: buf len failed\n");
 					goto IO_LNC_EXIT;
 				}
-				reg_bits_ptr = (struct isp_reg_bits*) g_isp_dev_ptr->buf_addr;
+				reg_bits_ptr = (struct isp_reg_bits*) fd->buf_addr;
 				ret = copy_from_user((void*)reg_bits_ptr, (void*)reg_param.reg_param, buf_size);
 				if ( 0 != ret) {
 					ISP_PRINT("isp_k: ioctl lnc: copy_to_user error, ret = 0x%x", (uint32_t)ret);
@@ -1113,14 +1168,14 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 					goto IO_LNC_EXIT;
 				}
 
-				ret = _isp_lnc_param_load(reg_bits_ptr, reg_param.counts);
+				ret = _isp_lnc_param_load(fd,reg_bits_ptr, reg_param.counts);
 				if (unlikely(ret)) {
 					ISP_PRINT ("isp_k:load lnc error \n");
 					ret = -EFAULT;
 				}
 				IO_LNC_EXIT:
 				if(reg_bits_ptr) {
-					memset((void *)g_isp_dev_ptr->buf_addr, 0x00, buf_size);
+					memset((void *)fd->buf_addr, 0x00, buf_size);
 					reg_bits_ptr = NULL;
 				}
 			}
@@ -1134,24 +1189,20 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 					ret = -EFAULT;
 					break;
 				}
-				ret = _isp_alloc(&reg_param.reg_param, reg_param.counts);
-				if ( 0 == ret) {
-					ret = copy_to_user((void*)param, (void*)&reg_param, sizeof(struct isp_reg_param));
-				} else {
-					ISP_PRINT("isp_k: ioctl alloc error, ret = 0x%x", (uint32_t)ret);
-					ret = -EFAULT;
-				}
+				reg_param.reg_param = fd->s_isp_alloc_addr;
+				reg_param.counts = fd->s_isp_alloc_len;
+				ret = copy_to_user((void*)param, (void*)&reg_param, sizeof(struct isp_reg_param));
 			}
 			break;
 
 			default:
-			mutex_unlock(&s_isp_lock);
+			mutex_unlock(&fd->s_isp_lock);
 			ISP_PRINT("isp_k:_ioctl cmd is unsupported, cmd = %x\n", (int32_t)cmd);
 			return -EFAULT;
 		}
 
 		ISP_IOCTL_LOCKED_CMD_EXIT:
-		mutex_unlock(&s_isp_lock);
+		mutex_unlock(&fd->s_isp_lock);
 	}
 
 	//ISP_PRINT("isp_k:_ioctl finished\n");
@@ -1162,95 +1213,85 @@ static long _isp_kernel_ioctl( struct file *fl, unsigned int cmd, unsigned long 
 static int _isp_probe(struct platform_device *pdev)
 {
 	int ret = 0;
+	uint32_t order = 0;
+	struct isp_buf_phy *isp_buf = NULL;
+
 	ISP_PRINT ("isp_k:probe start\n");
 
+	isp_buf = devm_kzalloc(&pdev->dev, sizeof(struct isp_buf_phy), GFP_KERNEL);
+	if (!isp_buf) {
+		return -ENOMEM;
+	}
+
+	platform_set_drvdata(pdev, isp_buf);
 	ret = misc_register(&isp_dev);
 	if (ret) {
 		ISP_PRINT ( "isp_k:probe cannot register miscdev on minor=%d (%d)\n",(int32_t)ISP_MINOR, (int32_t)ret);
-		return ret;
+		goto probe_out;
 	}
-	mutex_init(&s_isp_lock);
-/*
-	isp_proc_file = create_proc_read_entry("driver/sprd_isp" ,
-					0444,
-					NULL,
-					_isp_kernel_proc_read,
-					NULL);
-	if (unlikely(NULL == isp_proc_file)) {
-		ISP_PRINT("isp_k:probe Can't create an entry for isp in /proc \n");
-		ret = ENOMEM;
-		return ret;
+
+	isp_buf->buf_len = ISP_BUF_MAX_SIZE;
+	order = get_order(isp_buf->buf_len);
+	isp_buf->buf_vir_ptr = __get_free_pages(GFP_KERNEL | __GFP_COMP, order);
+	if (NULL == (void*)isp_buf->buf_vir_ptr ) {
+		ISP_PRINT("ISP_RAW:_isp_alloc order:0x%x, len:0x%x error\n", order, isp_buf->buf_len);
+		ret = 1;
+		goto probe_out;
 	}
-*/
+	isp_buf->buf_phy_ptr = virt_to_phys((volatile void *)isp_buf->buf_vir_ptr);
+	dmac_flush_range(isp_buf->buf_vir_ptr, isp_buf->buf_vir_ptr + isp_buf->buf_len);
+	outer_flush_range(__pa(isp_buf->buf_phy_ptr), __pa(isp_buf->buf_phy_ptr) + isp_buf->buf_len);
+
 	isp_dev.this_device->of_node = pdev->dev.of_node;
+	isp_dev.this_device->platform_data = (void *)isp_buf;
+
 	ISP_PRINT (" isp_k:probe end\n");
-	return 0;
+	goto exit;
+probe_out:
+	devm_kfree(&pdev->dev, isp_buf);
+	platform_set_drvdata(pdev, NULL);
+exit:
+	return ret;
 }
 
 static int _isp_remove(struct platform_device * dev)
 {
+	struct isp_buf_phy *isp_buf;
+	uint32_t order = 0;
+
 	ISP_PRINT ("isp_k: remove start \n");
+	isp_buf = platform_get_drvdata(dev);
+	if (!isp_buf)
+		goto remove_exit;
 
 	misc_deregister(&isp_dev);
-
+/*
 	if (isp_proc_file) {
 		remove_proc_entry("driver/sprd_isp", NULL);
 	}
+*/
+	order = get_order(isp_buf->buf_len);
+	free_pages(isp_buf->buf_vir_ptr, order);
+	devm_kfree(&dev->dev, isp_buf);
+	platform_set_drvdata(dev, NULL);
 
 	ISP_PRINT ("isp_k: remove end !\n");
 
+remove_exit:
 	return 0;
 }
 
 static int32_t __init isp_kernel_init(void)
 {
 	int32_t ret = 0;
-	uint32_t addr = 0;
+
 	ISP_PRINT ("isp_k: init start \n");
 	if (platform_driver_register(&isp_driver) != 0) {
 		ISP_PRINT ("isp_kernel_init: platform device register error \n");
 		return -1;
 	}
 
-	g_isp_dev_ptr = (struct isp_device_t*)vzalloc(sizeof(struct isp_device_t));
-	ISP_CHECK_ZERO(g_isp_dev_ptr);
-	init_MUTEX(&g_isp_dev_ptr->sem_isp);
-	init_MUTEX_LOCKED(&g_isp_dev_ptr->sem_isr); /*for interrupt */
-	g_isp_dev_ptr->s_isp_clk = NULL;
-	g_isp_dev_ptr->s_isp_clk_mm_i = NULL;
-	g_isp_dev_ptr->buf_addr = 0;
-	g_isp_dev_ptr->buf_len = 0;
-
-	g_isp_dev_ptr->buf_addr = (uint32_t)vzalloc(ISP_BUF_MAX_SIZE);
-	if (0 == g_isp_dev_ptr->buf_addr) {
-		ret = -1;
-		ISP_PRINT ("isp_kernel_init 1: alloc  error \n");
-		goto ISP_K_INIT_EXIT;
-	}
-	g_isp_dev_ptr->buf_len = ISP_BUF_MAX_SIZE;
-
-	ret = _isp_alloc(&addr, ISP_BUF_MAX_SIZE);
-	if (ret) {
-		ret = -1;
-		ISP_PRINT ("isp_kernel_init 2: alloc  error \n");
-		goto ISP_K_INIT_EXIT;
-	}
-
 	ISP_PRINT ("isp_k: init end\n");
-
-	return ret;
-
-ISP_K_INIT_EXIT:
-	_isp_free();
-	if (g_isp_dev_ptr->buf_addr) {
-		vfree((void *)g_isp_dev_ptr->buf_addr);
-		g_isp_dev_ptr->buf_addr = 0;
-		g_isp_dev_ptr->buf_len = 0;
-	}
-	if (g_isp_dev_ptr) {
-		vfree(g_isp_dev_ptr);
-		g_isp_dev_ptr = 0;
-	}
 
 	return ret;
 }
@@ -1260,16 +1301,6 @@ static void isp_kernel_exit(void)
 	ISP_PRINT ("isp_k: exit start \n");
 
 	platform_driver_unregister(&isp_driver);
-	mutex_destroy(&s_isp_lock);
-	_isp_free();
-	ISP_CHECK_ZERO_VOID(g_isp_dev_ptr);
-	if (g_isp_dev_ptr->buf_addr) {
-		vfree((void *)g_isp_dev_ptr->buf_addr);
-		g_isp_dev_ptr->buf_addr = 0;
-		g_isp_dev_ptr->buf_len = 0;
-	}
-	vfree(g_isp_dev_ptr);
-	g_isp_dev_ptr = NULL;
 
 	ISP_PRINT ("isp_k: exit end \n");
 }
