@@ -10,25 +10,13 @@ else
 ifeq ($(CONFIG_MACH_CORE3_W),y)
 obj-y += flash_core3.o
 else
-ifeq ($(CONFIG_MACH_VIVALTO3MVE3G_LTN),y)
-obj-y += flash_core3.o
-else
-ifeq ($(CONFIG_MACH_VIVALTO3MVEML3G),y)
-obj-y += flash_core3.o
-else
 ifeq ($(CONFIG_MACH_VIVALTO5MVE3G),y)
 obj-y += flash_core3.o
 else
 ifeq ($(CONFIG_MACH_GRANDNEOVE3G),y)
 obj-y += flash_core3.o
 else
-ifeq ($(CONFIG_MACH_J13G),y)
-obj-y += flash_sm5701.o
-else
 obj-y += flash_common.o
-endif
-endif
-endif
 endif
 endif
 endif

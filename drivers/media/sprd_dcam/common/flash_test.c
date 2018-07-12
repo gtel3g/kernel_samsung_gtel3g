@@ -16,74 +16,24 @@
  */
 #include "flash_test.h"
 
-#if defined (CONFIG_MACH_SP9630EA4MN) || defined (CONFIG_MACH_SP9630EA_4MOD)
-#define SPRD_PWM0_CTRL_OFST                       0xEC
-#define SPRD_PWM0_PATTERN_HIGHT_OFST              0x10
-#define SPRD_PWM0_PATTERT_LOW_OFST                0xC
-#define SPRD_PWM0_TONE_OFST                       0x8
-#define SPRD_PWM0_RATION_OFST                     0x4
-#define SPRD_WHTLED_CTRL_OFST                     0xF0
-#endif
-
 static struct class* flash_test_class = NULL;
-static int g_flash_mode = 0;
+static int g_flash_mode=0;
 
-#if IS_ENABLED(VERSION3L) || IS_ENABLED(VERSION3T)
+#if defined (CONFIG_ARCH_SCX35)
 int setflash(uint32_t flash_mode)
 {
 	switch (flash_mode) {
 	case FLASH_OPEN:        /*flash on */
 	case FLASH_TORCH:        /*for torch low light */
-#if defined (CONFIG_MACH_SP9630EA4MN) || defined (CONFIG_MACH_SP9630EA_4MOD)
-		/*ENABLE THE PWM0 CONTROLLTER: RTC_PWM0_EN=1 & PWM0_EN=1*/
-		sci_adi_set(ANA_CTL_GLB_BASE + SPRD_PWM0_CTRL_OFST, 0xC000);
-
-		/*SET PWM0 PATTERN HIGH*/
-		sci_adi_set(ANA_PWM_BASE + SPRD_PWM0_PATTERN_HIGHT_OFST, 0xFFFF);
-
-		/*SET PWM0 PATTERN LOW*/
-		sci_adi_set(ANA_PWM_BASE + SPRD_PWM0_PATTERT_LOW_OFST, 0xFFFF);
-
-		/*TONE DIV USE DEFAULT VALUE*/
-		sci_adi_clr(ANA_PWM_BASE + SPRD_PWM0_TONE_OFST, 0xFFFF);
-
-		/*SET PWM0 DUTY RATIO = 100%: MOD=FF & DUTY=FF*/
-		sci_adi_set(ANA_PWM_BASE + SPRD_PWM0_RATION_OFST, 0x0100);
-
-		/*ENABLE PWM0 OUTPUT: PWM0_EN=1*/
-		sci_adi_set(ANA_PWM_BASE, 0x100);
-
-		/*SET LOW LIGHT & ENABLE WHTLED*/
-		sci_adi_clr(ANA_CTL_GLB_BASE + SPRD_WHTLED_CTRL_OFST, 0x7F);
-#else
 		sci_adi_set(SPRD_ADISLAVE_BASE + SPRD_FLASH_OFST, SPRD_FLASH_CTRL_BIT | SPRD_FLASH_LOW_VAL); // 0x3 = 110ma
-#endif
 		break;
 	case FLASH_HIGH_LIGHT: /*high light */
-#if defined (CONFIG_MACH_SP9630EA4MN) || defined (CONFIG_MACH_SP9630EA_4MOD)
-		/*SET HIGH LIGHT*/
-		sci_adi_set(ANA_CTL_GLB_BASE + SPRD_WHTLED_CTRL_OFST, 0x40);
-		/*ENABLE WHTLED*/
-		sci_adi_clr(ANA_CTL_GLB_BASE + SPRD_WHTLED_CTRL_OFST, 0x1);
-#else
 		sci_adi_set(SPRD_ADISLAVE_BASE + SPRD_FLASH_OFST, SPRD_FLASH_CTRL_BIT | SPRD_FLASH_HIGH_VAL); // 0xf = 470ma
-#endif
 		break;
 	case FLASH_CLOSE_AFTER_OPEN:     /*close flash */
 	case FLASH_CLOSE_AFTER_AUTOFOCUS:
 	case FLASH_CLOSE:
-#if defined (CONFIG_MACH_SP9630EA4MN) || defined (CONFIG_MACH_SP9630EA_4MOD)
-		/*DISABLE WHTLED*/
-		sci_adi_set(ANA_CTL_GLB_BASE + SPRD_WHTLED_CTRL_OFST, 0x1);
-
-		/*DISABLE THE PWM0 CONTROLLTER: RTC_PWM0_EN=0 & PWM0_EN=0*/
-		sci_adi_clr(ANA_CTL_GLB_BASE + SPRD_PWM0_CTRL_OFST, 0xC000);
-
-		/*ENABLE PWM0 OUTPUT: PWM0_EN=0*/
-		sci_adi_clr(ANA_PWM_BASE, 0x100);
-#else
 		sci_adi_clr(SPRD_ADISLAVE_BASE + SPRD_FLASH_OFST, SPRD_FLASH_CTRL_BIT);
-#endif
 		break;
 	default:
 		printk("sprd_v4l2_setflash unknow mode:flash_mode 0x%x \n", flash_mode);
@@ -139,7 +89,7 @@ static ssize_t flash_test_store(struct device *dev,
 	ret = kstrtoul(buf, 16, &flash_mode);
 	if (ret)
 		return ret;
-	g_flash_mode = flash_mode;
+	g_flash_mode=flash_mode;
 	setflash(flash_mode);
 	return c;
 }

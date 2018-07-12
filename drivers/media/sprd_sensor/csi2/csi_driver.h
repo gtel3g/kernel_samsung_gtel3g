@@ -14,9 +14,9 @@
 #define CURRENT_VERSION 0     
 #else // __SIMULATOR__
 
-#if IS_ENABLED(VERSION2)
+#if defined (CONFIG_ARCH_SC8825)
 #define CURRENT_VERSION 0x3130322A     
-#elif IS_ENABLED(VERSION3L) || IS_ENABLED(VERSION3T)
+#elif defined (CONFIG_ARCH_SCX35)
 #define CURRENT_VERSION 0x3130332A
 #endif
 
@@ -110,7 +110,7 @@ struct csi_pclk_cfg {
 	u8    hsrxthssettle;
 };
 
-void dphy_init(u32 bps_per_lane, u32 phy_id);
+void dphy_init(u32 pclk, u32 phy_id);
 u8 csi_init(u32 base_address);
 u8 csi_close(void);
 u8 csi_get_on_lanes(void);

@@ -13,6 +13,7 @@
 #ifndef _SENSOR_DRV_SPRD_H_
 #define _SENSOR_DRV_SPRD_H_
 
+
 #define SENSOER_VDD_1200MV                  1200000
 #define SENSOER_VDD_1300MV                  1300000
 #define SENSOER_VDD_1500MV                  1500000
@@ -37,23 +38,22 @@ typedef enum {
 	SENSOR_VDD_UNUSED
 } SENSOR_VDD_VAL_E;
 
-enum sensor_id_e {
-	SENSOR_DEV_0 = 0,
-	SENSOR_DEV_1,
-	SENSOR_DEV_2,
-	SENSOR_DEV_MAX
-};
+typedef enum {
+	SENSOR_MAIN = 0,
+	SENSOR_SUB,
+	SENSOR_ATV = 5,
+	SENSOR_ID_MAX
+} SENSOR_ID_E;
 
-#define SENSOR_DEV0_I2C_NAME                 "sensor_main"
-#define SENSOR_DEV1_I2C_NAME                 "sensor_sub"
-#define SENSOR_DEV2_I2C_NAME                 "sensor_i2c_dev2"
-
-#define SENSOR_DEV0_I2C_ADDR                 0x30
-#define SENSOR_DEV1_I2C_ADDR                 0x21
-#define SENSOR_DEV2_I2C_ADDR                 0x30
+#define SENSOR_MAIN_I2C_NAME                 "sensor_main"
+#define SENSOR_SUB_I2C_NAME                  "sensor_sub"
+#define SENSOR_MAIN_I2C_ADDR                 0x30
+#define SENSOR_SUB_I2C_ADDR                  0x21
 
 #define SENSOR_I2C_BUST_NB                   7
 
+#define SENSOR_DEFALUT_MCLK                           24          /* MHZ */
+#define SENSOR_DISABLE_MCLK                           0           /* MHZ */
 
 #define SENSOR_MAX_MCLK                      96       /*MHz*/
 #define SENOR_CLK_M_VALUE                    1000000
@@ -73,7 +73,7 @@ enum sensor_id_e {
 #define PIN_CTL_CCIRPD0                      PIN_CTL_BASE + 0x348UL
 
 #define MISC_BASE                            SPRD_MISC_BASE    /*0xE0033000<-->0x82000000 */
-#if IS_ENABLED(VERSION2T)
+#ifdef CONFIG_ARCH_SC8810
 #define ANA_REG_BASE                         MISC_BASE + 0x600
 #define ANA_LDO_PD_CTL                       ANA_REG_BASE + 0x10
 #define ANA_LDO_VCTL2                        ANA_REG_BASE + 0x20
@@ -83,13 +83,13 @@ enum sensor_id_e {
 #define ANA_LDO_VCTL2                        ANA_REG_BASE + 0x1C
 #endif
 
-int sensor_k_set_pd_level(uint32_t *fd_handle, uint8_t power_level);
-int sensor_k_set_rst_level(uint32_t *fd_handle, uint32_t plus_level);
-int sensor_k_set_voltage_cammot(uint32_t *fd_handle, uint32_t cammot_val);
-int sensor_k_set_voltage_avdd(uint32_t *fd_handle, uint32_t avdd_val);
-int sensor_k_set_voltage_dvdd(uint32_t *fd_handle, uint32_t dvdd_val);
-int sensor_k_set_voltage_iovdd(uint32_t *fd_handle, uint32_t iodd_val);
-int sensor_k_set_mclk(uint32_t *fd_handle, uint32_t mclk);
-int sensor_k_sensor_sel(uint32_t *fd_handle, uint32_t sensor_id);
+int sensor_k_set_pd_level(char power_level);
+int sensor_k_set_rst_level(uint32_t plus_level);
+int sensor_k_set_voltage_cammot(uint32_t cammot_val);
+int sensor_k_set_voltage_avdd(uint32_t avdd_val);
+int sensor_k_set_voltage_dvdd(uint32_t dvdd_val);
+int sensor_k_set_voltage_iovdd(uint32_t iodd_val);
+int sensor_k_set_mclk(uint32_t mclk);
+int sensor_k_sensor_sel(uint32_t sensor_id);
 
 #endif //_SENSOR_DRV_K_H_

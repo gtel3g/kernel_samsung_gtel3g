@@ -51,6 +51,8 @@ struct rot_k_file {
 	struct device_node *dn;
 };
 
+static struct rot_k_private *s_rot_private;
+
 static void rot_k_irq(void *fd)
 {
 	struct rot_k_file *rot_file = (struct rot_k_file*)fd;
@@ -94,17 +96,10 @@ struct platform_device*  rot_get_platform_device(void)
 static int rot_k_open(struct inode *node, struct file *file)
 {
 	int ret = 0;
-//	struct rot_k_private *rot_private = (struct rot_k_private *)rotation_dev.this_device->platform_data ;//platform_get_drvdata(rot_get_platform_device())
+	struct rot_k_private *rot_private = s_rot_private;//platform_get_drvdata(rot_get_platform_device())
 	struct rot_k_file *fd = NULL;
 	struct miscdevice *md = file->private_data ;
-	struct rot_k_private *rot_private = NULL;
 
-	if (!md) {
-		ret = -EFAULT;
-		printk("rot_k_open fail miscdevice NULL \n");
-		goto exit;
-	}
-	rot_private = md->this_device->platform_data;
 	if (!rot_private) {
 		ret = -EFAULT;
 		printk("rot_k_open fail rot_private NULL \n");
@@ -119,7 +114,7 @@ static int rot_k_open(struct inode *node, struct file *file)
 	}
 	fd->rot_private = rot_private;
 	fd->drv_private.rot_fd = (void*)fd;
-	fd->dn = md->this_device->of_node;
+	fd ->dn = md->this_device->of_node;
 
 	spin_lock_init(&fd->drv_private.rot_drv_lock);
 
@@ -190,7 +185,7 @@ static long rot_k_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case ROT_IO_START:
 		down(&rot_private->start_sem);
 
-		ret = rot_k_module_en(fd->dn);
+		ret = rot_k_module_en(fd ->dn);
 		if (unlikely(ret)) {
 			printk("rot_k_ioctl error : rot_k_module_en\n");
 			up(&rot_private->start_sem);
@@ -200,7 +195,7 @@ static long rot_k_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		ret = rot_k_isr_reg(rot_k_irq, &fd->drv_private);
 		if (unlikely(ret)) {
 			printk("rot_k_ioctl error : Failed to register rot ISR \n");
-			rot_k_module_dis(fd->dn);
+			rot_k_module_dis(fd ->dn);
 			up(&rot_private->start_sem);
 			goto ioctl_exit;
 		}
@@ -208,15 +203,15 @@ static long rot_k_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		ret = copy_from_user(&params, (ROT_CFG_T *) arg, sizeof(ROT_CFG_T));
 		if (ret) {
 			printk("rot_k_ioctl error, failed get user info \n");
-			rot_k_module_dis(fd->dn);
+			rot_k_module_dis(fd ->dn);
 			up(&rot_private->start_sem);
 			goto ioctl_exit;
 		}
 
-		ret = rot_k_io_cfg(&params, &fd->drv_private.cfg);
+		ret = rot_k_io_cfg(&params,&fd->drv_private.cfg);
 		if (ret) {
 			printk("rot_k_ioctl error, failed cfg \n");
-			rot_k_module_dis(fd->dn);
+			rot_k_module_dis(fd ->dn);
 			up(&rot_private->start_sem);
 			goto ioctl_exit;
 		}
@@ -224,7 +219,7 @@ static long rot_k_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		ret = rot_k_start(fd);
 		if (ret) {
 			printk("rot_k_ioctl error: failed start \n");
-			rot_k_module_dis(fd->dn);
+			rot_k_module_dis(fd ->dn);
 			up(&rot_private->start_sem);
 			goto ioctl_exit;
 		}
@@ -243,7 +238,7 @@ static long rot_k_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			ret = rot_k_start(fd);
 			if (ret) {
 				printk("rot_k_ioctl error: failed second start \n");
-				rot_k_module_dis(fd->dn);
+				rot_k_module_dis(fd ->dn);
 				up(&rot_private->start_sem);
 				goto ioctl_exit;
 			}
@@ -257,7 +252,7 @@ static long rot_k_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 		rot_k_close();
 
-		rot_k_module_dis(fd->dn);
+		rot_k_module_dis(fd ->dn);
 
 		up(&rot_private->start_sem);
 		break;
@@ -273,7 +268,7 @@ ioctl_exit:
 ioctl_out:
 	dcam_rotation_end();
 	rot_k_close();
-	rot_k_module_dis(fd->dn);
+	rot_k_module_dis(fd ->dn);
 	up(&rot_private->start_sem);
 	return ret;
 
@@ -296,7 +291,6 @@ int rot_k_probe(struct platform_device *pdev)
 {
 	int ret;
 	struct rot_k_private *rot_private;
-	struct device *dev = NULL;
 
 	printk(KERN_ALERT "rot_k_probe called\n");
 
@@ -309,6 +303,8 @@ int rot_k_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, rot_private);
 
+	s_rot_private = rot_private;
+
 	ret = misc_register(&rotation_dev);
 	if (ret) {
 		printk(KERN_ERR "cannot register miscdev on minor=%d (%d)\n",
@@ -316,9 +312,6 @@ int rot_k_probe(struct platform_device *pdev)
 		ret = -EACCES;
 		goto probe_out;
 	}
-	dev = rotation_dev.this_device;
-	dev->of_node = pdev->dev.of_node;
-	dev->platform_data = (void *)rot_private;
 
 	printk(KERN_ALERT " rot_k_probe Success\n");
 	goto exit;

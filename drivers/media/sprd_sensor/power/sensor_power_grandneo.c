@@ -19,7 +19,6 @@
 #include <mach/hardware.h>
 #include <mach/board.h>
 #include "../sensor_drv_sprd.h"
-
 static int sensor_s5k4ecgx_poweron(struct sensor_power *main_cfg, struct sensor_power *sub_cfg)
 {
 	int ret = 0;
@@ -79,6 +78,55 @@ static int sensor_s5k4ecgx_poweroff(struct sensor_power *main_cfg, struct sensor
 
 }
 
+static int sensor_d221a_poweron(struct sensor_power *main_cfg, struct sensor_power *sub_cfg)
+{
+	int ret = 0;
+
+	sensor_k_sensor_sel(SENSOR_MAIN);
+	sensor_k_set_pd_level(0);
+	sensor_k_set_rst_level(0);
+	sensor_k_sensor_sel(SENSOR_SUB);
+	sensor_k_set_pd_level(0);
+	sensor_k_set_rst_level(0);
+	udelay(1);
+	sensor_k_set_voltage_avdd(SENSOR_VDD_2800MV);
+	mdelay(10);
+	sensor_k_set_voltage_iovdd(SENSOR_VDD_1800MV);
+	mdelay(10);
+	sensor_k_sensor_sel(SENSOR_MAIN);
+	sensor_k_set_voltage_dvdd(SENSOR_VDD_1200MV);//core vdd
+	mdelay(2);
+	sensor_k_set_voltage_dvdd(SENSOR_VDD_CLOSED);//close core vdd
+	sensor_k_sensor_sel(SENSOR_SUB);
+	sensor_k_set_mclk(24);
+	mdelay(5);
+	sensor_k_set_pd_level(1);
+	mdelay(5);
+	sensor_k_set_rst_level(1);
+	mdelay(5);
+	printk("d221a_poweron OK \n");
+
+	return ret;
+}
+
+static int sensor_d221a_poweroff(struct sensor_power *main_cfg, struct sensor_power *sub_cfg)
+{
+	int ret = 0;
+
+	sensor_k_sensor_sel(SENSOR_SUB);
+	sensor_k_set_mclk(0);
+	mdelay(1);
+	sensor_k_set_pd_level(0);
+	mdelay(1);
+	sensor_k_set_rst_level(0);
+	mdelay(1);
+	sensor_k_set_voltage_iovdd(SENSOR_VDD_CLOSED);
+	sensor_k_set_voltage_avdd(SENSOR_VDD_CLOSED);
+	mdelay(1);
+	printk("d221a_poweroff OK \n");
+
+	return ret;
+}
 
 static int sensor_hi255_poweron(struct sensor_power *main_cfg, struct sensor_power *sub_cfg)
 {
@@ -134,11 +182,14 @@ static int sensor_hi255_poweroff(struct sensor_power *main_cfg, struct sensor_po
 int sensor_power_on(uint8_t sensor_id, struct sensor_power *main_cfg, struct sensor_power *sub_cfg)
 {
 	int ret = 0;
-
 	if (SENSOR_MAIN == sensor_id) {
 		ret = sensor_s5k4ecgx_poweron(main_cfg, sub_cfg);
 	} else {
+	#ifdef CONFIG_MACH_GRANDNEOVE3G_rev_1
 		ret = sensor_hi255_poweron(main_cfg, sub_cfg);
+	#else
+		ret = sensor_d221a_poweron(main_cfg, sub_cfg);
+	#endif	
 	}
 	return ret;
 }
@@ -150,9 +201,12 @@ int sensor_power_off(uint8_t sensor_id, struct sensor_power *main_cfg, struct se
 	if (SENSOR_MAIN == sensor_id) {
 		ret = sensor_s5k4ecgx_poweroff(main_cfg, sub_cfg);
 	} else {
+	#ifdef CONFIG_MACH_GRANDNEOVE3G_rev_1
 		ret = sensor_hi255_poweroff(main_cfg, sub_cfg);
+	#else
+		ret = sensor_d221a_poweroff(main_cfg, sub_cfg);
+	#endif
 	}
 
 	return ret;
 }
-

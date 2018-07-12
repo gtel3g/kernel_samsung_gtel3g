@@ -116,7 +116,7 @@ static void rot_k_disable(void)
 
 static void rot_k_start(void)
 {
-#if IS_ENABLED(VERSION3L) || IS_ENABLED(VERSION3T)
+#if defined(CONFIG_ARCH_SCX30G)
 	REG_OWR(REG_ROTATION_PATH_CFG, ROT_START_BIT);
 #else
 	dcam_glb_reg_owr(REG_ROTATION_CTRL, ROT_START_BIT, DCAM_CONTROL_REG);

@@ -60,7 +60,7 @@ extern "C"
 #define SCALE_PATH_EB_BIT (1 << 2)
 #define SCALE_FRC_COPY_BIT (1 << 12)
 #define SCALE_COEFF_FRC_COPY_BIT (1 << 16)
-#if IS_ENABLED(VERSION3L) || IS_ENABLED(VERSION3T)
+#if defined(CONFIG_ARCH_SCX30G)
 #define SCALE_START_BIT (1 << 18)
 #else
 #define SCALE_START_BIT (1 << 4)

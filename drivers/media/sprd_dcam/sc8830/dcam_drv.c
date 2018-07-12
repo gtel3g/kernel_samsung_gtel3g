@@ -292,9 +292,7 @@ LOCAL const dcam_isr isr_list[DCAM_IRQ_NUMBER] = {
 	_dcam_rot_done,
 	_dcam_path1_slice_done,
 	_dcam_path2_slice_done,
-	_dcam_raw_slice_done,
-	NULL,
-	NULL
+	_dcam_raw_slice_done
 };
 
 void dcam_glb_reg_awr(uint32_t addr, uint32_t val, uint32_t reg_id)
@@ -1544,9 +1542,6 @@ int32_t dcam_path0_cfg(enum dcam_cfg_id id, void *param)
 		for (i = 0; i < DCAM_PATH_0_FRM_CNT_MAX; i++) {
 			frame->fid = base_id + i;
 			frame = frame->next;
-			if (frame == path->output_frame_head) {
-				break;
-			}
 		}
 		break;
 	}
@@ -1782,9 +1777,6 @@ int32_t dcam_path1_cfg(enum dcam_cfg_id id, void *param)
 		for (i = 0; i < DCAM_PATH_1_FRM_CNT_MAX; i++) {
 			frame->fid = base_id + i;
 			frame = frame->next;
-			if (frame == path->output_frame_head) {
-				break;
-			}
 		}
 		break;
 	}
@@ -2000,9 +1992,6 @@ int32_t dcam_path2_cfg(enum dcam_cfg_id id, void *param)
 		for (i = 0; i < DCAM_PATH_2_FRM_CNT_MAX; i++) {
 			frame->fid = base_id + i;
 			frame = frame->next;
-			if (frame == path->output_frame_head) {
-				break;
-			}
 		}
 		break;
 	}
@@ -2240,34 +2229,6 @@ int32_t    dcam_read_registers(uint32_t* reg_buf, uint32_t *buf_len)
 
 	*buf_len = (uint32_t)reg_addr - DCAM_BASE;
 	return 0;
-}
-
-int32_t    dcam_get_path_id(struct dcam_get_path_id *path_id, uint32_t *channel_id)
-{
-	int                      ret = DCAM_RTN_SUCCESS;
-
-	if (NULL == path_id || NULL == channel_id) {
-		return -1;
-	}
-
-	DCAM_TRACE("DCAM: fourcc 0x%x, w %d, h %d \n", path_id->fourcc, path_id->input_size.w, path_id->input_size.h);
-
-	if (path_id->need_isp_tool) {
-		*channel_id = DCAM_PATH0;
-	} else if (V4L2_PIX_FMT_GREY == path_id->fourcc && !path_id->is_path_work[DCAM_PATH0]) {
-		*channel_id = DCAM_PATH0;
-	} else if (V4L2_PIX_FMT_JPEG == path_id->fourcc && !path_id->is_path_work[DCAM_PATH0]) {
-		*channel_id = DCAM_PATH0;
-	} else if (path_id->input_size.w <= DCAM_PATH1_LINE_BUF_LENGTH  && !path_id->is_path_work[DCAM_PATH1]) {
-		*channel_id = DCAM_PATH1;
-	} else if (path_id->input_size.w <= DCAM_PATH2_LINE_BUF_LENGTH  && !path_id->is_path_work[DCAM_PATH2]) {
-		*channel_id = DCAM_PATH2;
-	} else {
-		*channel_id = DCAM_PATH0;
-	}
-	printk("DCAM: path id %d \n", *channel_id);
-
-	return ret;
 }
 
 LOCAL irqreturn_t _dcam_isr_root(int irq, void *dev_id)
@@ -3731,9 +3692,3 @@ void mm_clk_register_trace(void)
 			REG_RD(SPRD_MMCKG_BASE + i));
    }
 }
-
-int32_t dcam_stop_sc_coeff(void)
-{
-	return 0;
-}
-

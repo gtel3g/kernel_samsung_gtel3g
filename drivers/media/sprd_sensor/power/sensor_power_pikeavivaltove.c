@@ -80,53 +80,52 @@ static int sensor_s5k4ecgx_poweroff(struct sensor_power *main_cfg, struct sensor
 }
 
 
-static int sensor_hi255_poweron(struct sensor_power *main_cfg, struct sensor_power *sub_cfg)
+static int sensor_sr030pc50_poweron(struct sensor_power *main_cfg, struct sensor_power *sub_cfg)
 {
 	int ret = 0;
 
-	sensor_k_sensor_sel(SENSOR_MAIN);//select main sensor(sensor hi544);
-	sensor_k_set_pd_level(0);//power down valid for hi544
-	sensor_k_set_rst_level(0);//reset valid for hi544
-	sensor_k_sensor_sel(SENSOR_SUB);//select main sensor(sensor hi255);
-	sensor_k_set_pd_level(0);//power down valid for hi255
-	sensor_k_set_rst_level(0);//reset valid for hi255
+	sensor_k_sensor_sel(SENSOR_MAIN);//select main sensor
+	sensor_k_set_pd_level(0);//power down valid for main sensor
+	sensor_k_set_rst_level(0);//reset valid for main sensor
+	sensor_k_sensor_sel(SENSOR_SUB);//select main sensor
+	sensor_k_set_pd_level(0);//power down valid for main sensor
+	sensor_k_set_rst_level(0);//reset valid for main sensor
 	udelay(1);
 	sensor_k_set_voltage_iovdd(SENSOR_VDD_1800MV);//IO vdd
-	mdelay(1);
+	mdelay(1);//delay 6ms < 10ms
 	sensor_k_set_voltage_avdd(SENSOR_VDD_2800MV);
-	udelay(50);
-	sensor_k_set_voltage_dvdd(SENSOR_VDD_1200MV);//core vdd
+	mdelay(1);//delay 6ms < 10ms
+	sensor_k_set_voltage_dvdd(SENSOR_VDD_1800MV);
 	mdelay(2);
-	sensor_k_set_voltage_dvdd(SENSOR_VDD_CLOSED);//close core vdd
-	udelay(50);
-	sensor_k_set_pd_level(1);
-	mdelay(2);//delay 2ms > 1ms
 	sensor_k_set_mclk(24);
+	mdelay(2);
+	sensor_k_set_pd_level(1);
 	mdelay(30);//delay 30ms >= 30ms
 	sensor_k_set_rst_level(1);
 	udelay(2);//delay 2us > 16MCLK = 16/24 us
-	printk("hi255_poweron OK \n");
+	printk("sr030pc50_poweron OK \n");
 
 	return ret;
 }
 
-static int sensor_hi255_poweroff(struct sensor_power *main_cfg, struct sensor_power *sub_cfg)
+static int sensor_sr030pc50_poweroff(struct sensor_power *main_cfg, struct sensor_power *sub_cfg)
 {
 	int ret = 0;
 
-	sensor_k_sensor_sel(SENSOR_SUB);//select main sensor(sensor hi255);
+	sensor_k_sensor_sel(SENSOR_SUB);//select sub sensor
 	udelay(2);//delay 2us > 16MCLK = 16/24 us
-	sensor_k_set_rst_level(0);//reset valid for hi255	
+	sensor_k_set_rst_level(0);//reset valid for sub sensor
 	udelay(2);//delay 2us > 16MCLK = 16/24 us
 	sensor_k_set_mclk(0);// disable mclk
 	udelay(1);//delay 1us > 0ns
-	sensor_k_set_pd_level(0);//power down valid for hi255
+	sensor_k_set_pd_level(0);//power down valid for sub sensor
 	mdelay(6);//delay 6ms < 10ms
+	sensor_k_set_voltage_dvdd(SENSOR_VDD_CLOSED);
 	sensor_k_set_voltage_avdd(SENSOR_VDD_CLOSED);
 	//mdelay(6);//delay 6ms < 10ms
 	sensor_k_set_voltage_iovdd(SENSOR_VDD_CLOSED);
 	udelay(1);
-	printk("hi255_poweroff OK \n");
+	printk("sr030pc50_poweroff OK \n");
 
 	return ret;
 }
@@ -135,10 +134,13 @@ int sensor_power_on(uint8_t sensor_id, struct sensor_power *main_cfg, struct sen
 {
 	int ret = 0;
 
+	if (!main_cfg || !sub_cfg) {
+		printk("sensor_power_on, para err 0x%x 0x%x \n", main_cfg, sub_cfg);
+	}
 	if (SENSOR_MAIN == sensor_id) {
 		ret = sensor_s5k4ecgx_poweron(main_cfg, sub_cfg);
 	} else {
-		ret = sensor_hi255_poweron(main_cfg, sub_cfg);
+		ret = sensor_sr030pc50_poweron(main_cfg, sub_cfg);
 	}
 	return ret;
 }
@@ -147,12 +149,15 @@ int sensor_power_off(uint8_t sensor_id, struct sensor_power *main_cfg, struct se
 {
 	int ret = 0;
 
+	if (!main_cfg || !sub_cfg) {
+		printk("sensor_power_off, para err 0x%x 0x%x \n", main_cfg, sub_cfg);
+	}
+
 	if (SENSOR_MAIN == sensor_id) {
 		ret = sensor_s5k4ecgx_poweroff(main_cfg, sub_cfg);
 	} else {
-		ret = sensor_hi255_poweroff(main_cfg, sub_cfg);
+		ret = sensor_sr030pc50_poweroff(main_cfg, sub_cfg);
 	}
 
 	return ret;
 }
-
