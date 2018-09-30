@@ -232,24 +232,31 @@ static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
 #else
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es_1300 = {
 	.freq_tbl = {
-		{0, 1500000},
-		{1, 1400000},
+		{0, 1536000},
+		{1, 1363200},
 		{2, 1300000},
 		{3, 1200000},
-		{4, 1000000},
-		{5, SHARK_TDPLL_FREQUENCY},
-		{6, 500000},
-		{7, CPUFREQ_TABLE_END},
-	},
-	.vddarm_mv = {
-		1150000,
-		1150000,
-		1100000,
-		1100000,
-		1000000,
-		900000,
-		900000,
-		900000,
+		{4, 1190400},
+		{5, 1036800},
+		{6, 960000},
+		{7, 800000},
+		{8, SHARK_TDPLL_FREQUENCY},
+		{9, 729600},
+		{10,CPUFREQ_TABLE_END},
+        },
+        .vddarm_mv = {
+		1085000,
+		1035000,
+		985000,
+		970000,
+		955000,
+		940000,
+		925000,
+		910000,
+		895000,
+		880000,
+		880000,
+        },
 	},
 };
 #endif
@@ -440,8 +447,8 @@ static int sprd_cpufreq_verify_speed(struct cpufreq_policy *policy)
 	return cpufreq_frequency_table_verify(policy, sprd_cpufreq_conf->freq_tbl);
 }
 
-unsigned int cpufreq_min_limit = 500000;
-unsigned int cpufreq_max_limit = 1500000;
+unsigned int cpufreq_min_limit = ULONG_MAX;
+unsigned int cpufreq_max_limit = 0;
 unsigned int dvfs_score_select = 5;
 unsigned int dvfs_unplug_select = 2;
 unsigned int dvfs_plug_select = 0;
@@ -465,8 +472,6 @@ static int sprd_cpufreq_target(struct cpufreq_policy *policy,
 	struct cpufreq_frequency_table *table;
 	int max_freq = cpufreq_max_limit;
 	int min_freq = cpufreq_min_limit;
-	int cur_freq = 0;
-	unsigned long irq_flags;
 
 	/* delay 30s to enable dvfs&dynamic-hotplug,
          * except requirment from termal-cooling device
