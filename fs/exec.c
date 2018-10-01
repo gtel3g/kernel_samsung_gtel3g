@@ -1149,7 +1149,7 @@ void setup_new_exec(struct linux_binprm * bprm)
 	   group */
 
 	current->self_exec_id++;
-
+			
 	flush_signal_handlers(current, 0);
 	do_close_on_exec(current->files);
 }
@@ -1275,8 +1275,6 @@ static int check_unsafe_exec(struct linux_binprm *bprm)
 	return res;
 }
 
-/* 
- * Fill the binprm structure from the inode. 
 static void bprm_fill_uid(struct linux_binprm *bprm)
 {
 	struct inode *inode;
