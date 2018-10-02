@@ -15,6 +15,9 @@ struct zt7554_ts_platform_data {
 	int		gpio_scl;
 	int		gpio_sda;
 	int		gpio_ldo_en;
+    /* ZINITIX_ZT7554_USE_DUAL_FW */
+    int     tsp_vendor_1;
+    int     tsp_vendor_2;
 	int             (*tsp_power)(struct i2c_client *client, int on);
 	u32		x_resolution;
 	u32		y_resolution;
