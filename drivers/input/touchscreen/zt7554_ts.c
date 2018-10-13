@@ -16,9 +16,30 @@
  */
 #include "zt7554_ts.h"
 #include "zinitix_touch_t560.h"
+#include "zinitix_touch_t560_G1F.h"
 
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-#include <linux/input/doubletap2wake.h>
+#ifdef ZINITIX_ZT7554_USE_DUAL_FW
+static void zt7554_firmware_check(struct zt7554_ts_info *info)
+{
+	int tsp_vendor_1 = info->pdata->tsp_vendor_1;
+	int tsp_vendor_2 = info->pdata->tsp_vendor_2;
+	int vendor_1 = gpio_get_value(tsp_vendor_1);
+	int vendor_2 = gpio_get_value(tsp_vendor_2);
+
+	printk(KERN_DEBUG
+		"%s()[USE_DUAL_FW]GPIO_%d=%d,GPIO_%d=%d\n", __func__,
+		tsp_vendor_1,vendor_1,
+		tsp_vendor_2,vendor_2);
+
+	if ((vendor_1==0) && (vendor_2==0))
+  		info->tsp_type = TSP_HW_ID_INDEX_GFF;
+	else if ((vendor_1==1) && (vendor_2==1))
+		info->tsp_type = TSP_HW_ID_INDEX_G1F;
+  	else
+		info->tsp_type = TSP_HW_ID_INDEX_NON;
+
+	printk(KERN_DEBUG "%s()[USE_DUAL_FW]tsp_type:%d\n", __func__, info->tsp_type);
+}
 #endif
 
 u32 BUTTON_MAPPING_KEY[MAX_SUPPORTED_BUTTON_NUM] = {KEY_RECENT, KEY_BACK};
@@ -625,15 +646,27 @@ static bool ts_check_need_upgrade(struct zt7554_ts_info *info,
 #if CHECK_HWID
 	u16	new_hw_id;
 #endif
-	new_version = (u16) (m_firmware_data[52] | (m_firmware_data[53]<<8));
-	new_minor_version = (u16) (m_firmware_data[56] | (m_firmware_data[57]<<8));
-	new_reg_version = (u16) (m_firmware_data[60] | (m_firmware_data[61]<<8));
+	if (info->tsp_type == TSP_HW_ID_INDEX_G1F) {
+		new_version = (u16) (m_firmware_data_G1F[52] | (m_firmware_data_G1F[53]<<8));
+		new_minor_version = (u16) (m_firmware_data_G1F[56] | (m_firmware_data_G1F[57]<<8));
+		new_reg_version = (u16) (m_firmware_data_G1F[60] | (m_firmware_data_G1F[61]<<8));
 
 #if CHECK_HWID
-	new_hw_id = (u16) (m_firmware_data[48] | (m_firmware_data[49]<<8));
-	dev_dbg(&info->client->dev, "cur HW_ID = 0x%x, new HW_ID = 0x%x\n",
-							cur_hw_id, new_hw_id);
+		new_hw_id = (u16) (m_firmware_data_G1F[48] | (m_firmware_data_G1F[49]<<8));
+		dev_dbg(&info->client->dev, "%s()[USE_DUAL_FW]cur HW_ID = 0x%x, new HW_ID = 0x%x\n",
+								__func__, cur_hw_id, new_hw_id);
 #endif
+	} else {
+		new_version = (u16) (m_firmware_data[52] | (m_firmware_data[53]<<8));
+		new_minor_version = (u16) (m_firmware_data[56] | (m_firmware_data[57]<<8));
+		new_reg_version = (u16) (m_firmware_data[60] | (m_firmware_data[61]<<8));
+
+#if CHECK_HWID
+		new_hw_id = (u16) (m_firmware_data[48] | (m_firmware_data[49]<<8));
+		dev_dbg(&info->client->dev, "cur HW_ID = 0x%x, new HW_ID = 0x%x\n",
+                                cur_hw_id, new_hw_id);
+#endif
+	}
 
 	dev_info(&info->client->dev, "cur version = 0x%x, new version = 0x%x\n",
 							cur_version, new_version);
@@ -664,6 +697,21 @@ static bool ts_check_need_upgrade(struct zt7554_ts_info *info,
 		return false;
 	if (cur_reg_version < new_reg_version)
 		return true;
+
+#ifdef ZINITIX_ZT7554_USE_DUAL_FW
+	/*
+	* Exceptive Case
+	* G1F TSP connected -> power off -> GFF TSP connected -> GFF FW should be updated even though GFF FW is lower. 
+	* GFF Chip firmware version [ZI 00 56 0D] //reg_version : 00 ~ 39
+	* G1F Chip firmware version [ZI 00 56 50] //reg_version : 40 ~ 90
+	*/
+	if (info->tsp_type == TSP_HW_ID_INDEX_GFF) {
+		if (cur_reg_version >= 0x40) {
+			dev_info(&info->client->dev, "%s()[USE_DUAL_FW]need to be updated.\n", __func__);
+			return true;
+		}
+	}
+#endif
 
 	return false;
 }
@@ -982,12 +1030,21 @@ retry_init:
 	if (read_data(client, ZT7554_DATA_VERSION_REG, (u8 *)&cap->reg_data_version, 2) < 0)
 		goto fail_init;
 
+#ifdef ZINITIX_ZT7554_USE_DUAL_FW
+	zt7554_firmware_check(info);
+#endif
+
 	if (!forced && ts_check_need_upgrade(info, cap->fw_version,
 			cap->fw_minor_version, cap->reg_data_version, cap->hw_id)) {
 		dev_info(&client->dev, "%s: start upgrade firmware\n", __func__);
 
-		if (!ts_upgrade_firmware(info, m_firmware_data, cap->ic_fw_size))
-			goto fail_init;
+		if (info->tsp_type == TSP_HW_ID_INDEX_G1F) {
+			if (!ts_upgrade_firmware(info, m_firmware_data_G1F, cap->ic_fw_size))
+				goto fail_init;
+		} else {
+			if (!ts_upgrade_firmware(info, m_firmware_data, cap->ic_fw_size))
+				goto fail_init;
+		}
 
 		if (read_data(client, ZT7554_CHECKSUM_RESULT, (u8 *)&chip_check_sum, 2) < 0)
 			goto fail_init;
@@ -1101,9 +1158,16 @@ fail_init:
 
 	} else if (retry_cnt == INIT_RETRY_CNT + 1) {
 		cap->ic_fw_size = 64 * 1024;
-		if (!ts_upgrade_firmware(info, m_firmware_data, cap->ic_fw_size)) {
-			dev_err(&client->dev, "firmware upgrade fail!\n");
+		if (info->tsp_type == TSP_HW_ID_INDEX_G1F) {
+			if (!ts_upgrade_firmware(info, m_firmware_data_G1F, cap->ic_fw_size)) {
+				dev_err(&client->dev, "firmware upgrade fail!\n");
 				return false;
+			}
+		} else {
+			if (!ts_upgrade_firmware(info, m_firmware_data, cap->ic_fw_size)) {
+				dev_err(&client->dev, "firmware upgrade fail!\n");
+				return false;
+			}
 		}
 		mdelay(100);
 
@@ -1123,6 +1187,11 @@ static bool mini_init_touch(struct zt7554_ts_info *info)
 	struct zt7554_ts_platform_data *pdata = info->pdata;
 	struct i2c_client *client = info->client;
 	int i;
+
+#ifdef ZINITIX_ZT7554_USE_DUAL_FW
+	zt7554_firmware_check(info);
+#endif
+
 #if USE_CHECKSUM
 	u16 chip_check_sum;
 	if (read_data(client, ZT7554_CHECKSUM_RESULT, (u8 *)&chip_check_sum, 2) < 0)
@@ -1417,9 +1486,6 @@ static void zt7554_ts_late_resume(struct early_suspend *h)
 {
 	struct zt7554_ts_info *info = misc_info;
 
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-	if (!dt2w_switch) {
-#endif
 	if (!info)
 		return;
 
@@ -1438,10 +1504,6 @@ static void zt7554_ts_late_resume(struct early_suspend *h)
 	info->work_state = NOTHING;
 	up(&info->work_lock);
 	return;
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-	}
-#endif
-
 
 fail_late_resume:
 	dev_err(&info->client->dev, "failed to late resume\n");
@@ -1457,10 +1519,6 @@ static void zt7554_ts_early_suspend(struct early_suspend *h)
 
 	if (!info)
 		return;
-
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-	if (!dt2w_switch) {
-#endif
 
 	disable_irq(info->irq);
 #if ESD_TIMER_INTERVAL
@@ -1495,10 +1553,6 @@ static void zt7554_ts_early_suspend(struct early_suspend *h)
 #endif
 	up(&info->work_lock);
 	return;
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-	}
-#endif
-
 }
 #endif	/* CONFIG_HAS_EARLYSUSPEND */
 
@@ -1772,7 +1826,11 @@ static void fw_update(void *device_data)
 
 	switch (info->factory_info->cmd_param[0]) {
 	case BUILT_IN:
-		ret = ts_upgrade_sequence((u8 *)m_firmware_data);
+		if (info->tsp_type == TSP_HW_ID_INDEX_G1F) {
+			ret = ts_upgrade_sequence((u8 *)m_firmware_data_G1F);
+		} else {
+			ret = ts_upgrade_sequence((u8 *)m_firmware_data);
+		}
 		if (ret < 0) {
 			info->factory_info->cmd_state = FAIL;
 			return;
@@ -1856,13 +1914,21 @@ static void get_fw_ver_bin(void *device_data)
 	u32 version, length;
 
 	set_default_result(info);
-
-	fw_version = (u16)(m_firmware_data[52] | (m_firmware_data[53] << 8));
-	fw_minor_version = (u16)(m_firmware_data[56] | (m_firmware_data[57] << 8));
-	reg_version = (u16)(m_firmware_data[60] | (m_firmware_data[61] << 8));
-	hw_id = (u16)(m_firmware_data[48] | (m_firmware_data[49] << 8));
-	version = (u32)((u32)(hw_id & 0xff) << 16) | ((fw_version & 0xf) << 12)
-				| ((fw_minor_version & 0xf) << 8) | (reg_version & 0xff);
+	if (info->tsp_type == TSP_HW_ID_INDEX_G1F) {
+		fw_version = (u16)(m_firmware_data_G1F[52] | (m_firmware_data_G1F[53] << 8));
+		fw_minor_version = (u16)(m_firmware_data_G1F[56] | (m_firmware_data_G1F[57] << 8));
+		reg_version = (u16)(m_firmware_data_G1F[60] | (m_firmware_data_G1F[61] << 8));
+		hw_id = (u16)(m_firmware_data_G1F[48] | (m_firmware_data_G1F[49] << 8));
+		version = (u32)((u32)(hw_id & 0xff) << 16) | ((fw_version & 0xf) << 12)
+    				| ((fw_minor_version & 0xf) << 8) | (reg_version & 0xff);
+	} else {
+		fw_version = (u16)(m_firmware_data[52] | (m_firmware_data[53] << 8));
+		fw_minor_version = (u16)(m_firmware_data[56] | (m_firmware_data[57] << 8));
+		reg_version = (u16)(m_firmware_data[60] | (m_firmware_data[61] << 8));
+		hw_id = (u16)(m_firmware_data[48] | (m_firmware_data[49] << 8));
+		version = (u32)((u32)(hw_id & 0xff) << 16) | ((fw_version & 0xf) << 12)
+    				| ((fw_minor_version & 0xf) << 8) | (reg_version & 0xff);
+	}
 
 	length = sizeof(vendor_id);
 	snprintf(finfo->cmd_buff, length + 1, "%s", "ZI");
@@ -1966,6 +2032,32 @@ static void get_chip_name(void *device_data)
 	return;
 }
 
+#ifdef ZINITIX_ZT7554_USE_DUAL_FW
+#define ZT7554_MODULE_VENDOR_GFF "ZT7554_GFF"
+#define ZT7554_MODULE_VENDOR_G1F "ZT7554_G1F"
+
+static void get_module_vendor(void *device_data)
+{
+	struct zt7554_ts_info *info = (struct zt7554_ts_info *)device_data;
+	struct tsp_factory_info *finfo = info->factory_info;
+
+	set_default_result(info);
+
+	if (info->tsp_type == TSP_HW_ID_INDEX_G1F)
+	    snprintf(finfo->cmd_buff, sizeof(finfo->cmd_buff), "%s", ZT7554_MODULE_VENDOR_G1F);
+	else
+		snprintf(finfo->cmd_buff, sizeof(finfo->cmd_buff), "%s", ZT7554_MODULE_VENDOR_GFF);
+	set_cmd_result(info, finfo->cmd_buff,
+					strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
+	finfo->cmd_state = OK;
+
+	dev_dbg(&info->client->dev, "%s: %s(%d)\n", __func__, finfo->cmd_buff,
+				strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
+
+	return;
+}
+#endif
+
 static void get_x_num(void *device_data)
 {
 	struct zt7554_ts_info *info = (struct zt7554_ts_info *)device_data;
@@ -2049,6 +2141,10 @@ err:
 #define FW_DATE "0000"
 #endif
 
+#ifndef FW_DATE_G1F
+#define FW_DATE_G1F	"0000"
+#endif
+
 static void get_config_ver(void *device_data)
 {
 	struct zt7554_ts_info *info = (struct zt7554_ts_info *)device_data;
@@ -2056,8 +2152,13 @@ static void get_config_ver(void *device_data)
 
 	set_default_result(info);
 
-	snprintf(finfo->cmd_buff, sizeof(finfo->cmd_buff),
-				"%s_ZI_%s", info->pdata->model_name, FW_DATE);
+	if (info->tsp_type == TSP_HW_ID_INDEX_G1F) {
+		snprintf(finfo->cmd_buff, sizeof(finfo->cmd_buff),
+    				"%s_ZI_%s", info->pdata->model_name, FW_DATE_G1F);
+	} else {
+		snprintf(finfo->cmd_buff, sizeof(finfo->cmd_buff),
+    				"%s_ZI_%s", info->pdata->model_name, FW_DATE);
+	}
 	finfo->cmd_state = OK;
 	set_cmd_result(info, finfo->cmd_buff,
 					strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
@@ -2255,7 +2356,7 @@ static void get_reference(void *device_data)
 
 	node_num = x_node * info->cap_info.y_node_num + y_node;
 
-	val = raw_data->ref_data[node_num];
+	val = info->ref_data[node_num];
 	snprintf(finfo->cmd_buff, sizeof(finfo->cmd_buff), "%u", val);
 	set_cmd_result(info, finfo->cmd_buff,
 					strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
@@ -2465,6 +2566,11 @@ static ssize_t store_cmd(struct device *dev, struct device_attribute
 	bool cmd_found = false;
 	int param_cnt = 0;
 
+    if (strlen(buf) >= TSP_CMD_STR_LEN) {
+		dev_err(&client->dev, "%s: cmd length is over (%s,%d)!!\n", __func__, buf, (int)strlen(buf));
+		return -EINVAL;
+	}
+    
 	if (finfo->cmd_is_running == true) {
 		dev_err(&client->dev, "%s: other cmd is running\n", __func__);
 		goto err_out;
@@ -2525,7 +2631,7 @@ static ssize_t store_cmd(struct device *dev, struct device_attribute
 				param_cnt++;
 			}
 			cur++;
-		} while (cur - buf <= len);
+		} while ((cur - buf <= len) && (param_cnt < TSP_CMD_PARAM_NUM));
 	}
 
 	dev_dbg(&client->dev, "cmd = %s\n", tsp_cmd_ptr->cmd_name);
@@ -2754,6 +2860,40 @@ static int zt7554_ts_probe_dt(struct device_node *np, struct device *dev,
 	}
 	gpio_direction_input(pdata->gpio_int);
 
+	/* tsp_vendor1, tsp_vendor2 */
+	pdata->tsp_vendor_1 = of_get_named_gpio(np, "tsp_vendor_1", 0);
+	dev_dbg(dev, "%s()[USE_DUAL_FW]tsp_vendor_1:%d\n", __func__, pdata->tsp_vendor_1);
+	if (pdata->tsp_vendor_1 < 0) {
+		dev_err(dev, "failed to get tsp_vendor_1\n");
+		return -EINVAL;
+	}
+
+	pdata->tsp_vendor_2 = of_get_named_gpio(np, "tsp_vendor_2", 0);
+	dev_dbg(dev, "%s()[USE_DUAL_FW]tsp_vendor_2:%d\n", __func__, pdata->tsp_vendor_2);
+	if (pdata->tsp_vendor_2 < 0) {
+		dev_err(dev, "failed to get tsp_vendor_2\n");
+		return -EINVAL;
+	}
+
+	ret = gpio_request(pdata->tsp_vendor_1, "tsp_vendor_1");
+	if (ret < 0) {
+		dev_err(dev, "failed to request tsp_vendor_1\n");
+		return -EINVAL;
+	}
+	gpio_direction_input(pdata->tsp_vendor_1);  
+
+	ret = gpio_request(pdata->tsp_vendor_2, "tsp_vendor_2");
+	if (ret < 0) {
+		dev_err(dev, "failed to request tsp_vendor_2\n");
+		return -EINVAL;
+	}
+	gpio_direction_input(pdata->tsp_vendor_2);
+
+	dev_dbg(dev,
+		"%s()[USE_DUAL_FW]GPIO_%d=%d,GPIO_%d=%d\n", __func__,
+		pdata->tsp_vendor_1,gpio_get_value(pdata->tsp_vendor_1),
+		pdata->tsp_vendor_2,gpio_get_value(pdata->tsp_vendor_2));
+
 	/* external firmware */
 	ret = of_property_read_string(np, "zt7554,ext_fw_name", &pdata->ext_fw_name);
 	if (ret < 0) {
@@ -2873,11 +3013,19 @@ static long ts_misc_fops_ioctl(struct file *filp,
 		break;
 
 	case TOUCH_IOCTL_VARIFY_UPGRADE_DATA:
-		if (copy_from_user(m_firmware_data,
-			argp, misc_info->cap_info.ic_fw_size))
-			return -1;
+		if (misc_info->tsp_type == TSP_HW_ID_INDEX_G1F) {
+			if (copy_from_user(m_firmware_data_G1F,
+				argp, misc_info->cap_info.ic_fw_size))
+				return -1;
 
-		version = (u16) (m_firmware_data[52] | (m_firmware_data[53]<<8));
+			version = (u16) (m_firmware_data_G1F[52] | (m_firmware_data_G1F[53]<<8));
+		} else {
+			if (copy_from_user(m_firmware_data,
+				argp, misc_info->cap_info.ic_fw_size))
+				return -1;
+
+			version = (u16) (m_firmware_data[52] | (m_firmware_data[53]<<8));
+		}
 
 		dev_err(&misc_info->client->dev, "firmware version = %x\n", version);
 
@@ -2886,7 +3034,11 @@ static long ts_misc_fops_ioctl(struct file *filp,
 		break;
 
 	case TOUCH_IOCTL_START_UPGRADE:
-		return ts_upgrade_sequence((u8 *)m_firmware_data);
+		if (misc_info->tsp_type == TSP_HW_ID_INDEX_G1F) {
+			return ts_upgrade_sequence((u8 *)m_firmware_data_G1F);
+		} else {
+			return ts_upgrade_sequence((u8 *)m_firmware_data);
+		}
 
 	case TOUCH_IOCTL_GET_X_RESOLUTION:
 		ret = misc_info->pdata->x_resolution;
@@ -3285,11 +3437,7 @@ static int zt7554_ts_probe(struct i2c_client *client, const struct i2c_device_id
 		goto err_gpio_irq;
 	}
 	ret = request_threaded_irq(info->irq, NULL, zt7554_touch_work,
-		IRQF_TRIGGER_FALLING | IRQF_ONESHOT 
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-			| IRQF_NO_SUSPEND
-#endif
-		, ZT7554_TS_DEVICE, info);
+		IRQF_TRIGGER_FALLING | IRQF_ONESHOT , ZT7554_TS_DEVICE, info);
 
 	if (ret) {
 		dev_err(&client->dev, "failed to request irq.\n");

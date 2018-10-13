@@ -58,6 +58,11 @@ static const unsigned long touch_cpufreq_lock = 1350000;
 #define TS_DRVIER_VERSION		"1.0.18_1"
 #define ZT7554_TS_DEVICE		"zt7554_ts"
 
+#define ZINITIX_ZT7554_USE_DUAL_FW
+#define TSP_HW_ID_INDEX_GFF     0
+#define TSP_HW_ID_INDEX_G1F     3
+#define TSP_HW_ID_INDEX_NON     0x11
+
 #define TOUCH_POINT_MODE		1
 #define ZINITIX_MISC_DEBUG		1
 #define CHECK_HWID			0
@@ -426,6 +431,8 @@ struct zt7554_ts_info {
 	s16					vdiff_min_y;
 	s16					vdiff_min_val;
 	u8					finger_cnt;
+
+    u8                  tsp_type;
 };
 
 #ifdef SEC_FACTORY_TEST
