@@ -190,10 +190,10 @@ static ssize_t mem_used_total_show(struct device *dev,
 
 	down_read(&zram->init_lock);
 	if (zram->init_done)
-		val = zs_get_total_pages(meta->mem_pool);
+		val = zs_get_total_size_bytes(meta->mem_pool);
 	up_read(&zram->init_lock);
 
-	return sprintf(buf, "%llu\n", val << PAGE_SHIFT);
+	return sprintf(buf, "%llu\n", val);
 }
 
 static uint32_t total_mem_usage_percent = 30;
@@ -224,14 +224,14 @@ static ssize_t mem_free_percent(void)
 			meta = zram->meta;
 			if (meta && meta->mem_pool)
 			{
-				val += zs_get_total_pages(meta->mem_pool);
+				val += zs_get_total_size_bytes(meta->mem_pool);
 			}
 		}
 
 		up_read(&zram->init_lock);
 	}
 
-	mem_used_pages = val;
+	mem_used_pages = val >> PAGE_SHIFT;
 
 	pr_debug("ZRAM:totalram_pages:%lu,total_zram_pages:%lu,mem_used_pages:%lu\r\n", totalram_pages, total_zram_pages,mem_used_pages);
 
