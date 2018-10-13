@@ -232,14 +232,20 @@ static struct cpufreq_table_data sc8830t_cpufreq_table_data_es = {
 #else
 static struct cpufreq_table_data sc8830t_cpufreq_table_data_es_1300 = {
 	.freq_tbl = {
-		{0, 1300000},
-		{1, 1200000},
-		{2, 1000000},
-		{3, SHARK_TDPLL_FREQUENCY},
-		{4, CPUFREQ_TABLE_END},
+		{0, 1500000},
+		{1, 1400000},
+		{2, 1300000},
+		{3, 1200000},
+		{4, 1000000},
+		{5, SHARK_TDPLL_FREQUENCY},
+		{6, 500000},
+		{7, CPUFREQ_TABLE_END},
 	},
 	.vddarm_mv = {
-		1050000,
+		1150000,
+		1150000,
+		1100000,
+		1100000,
 		1000000,
 		900000,
 		900000,
@@ -247,7 +253,6 @@ static struct cpufreq_table_data sc8830t_cpufreq_table_data_es_1300 = {
 	},
 };
 #endif
-
 struct cpufreq_conf sc8830_cpufreq_conf = {
 	.clk = NULL,
 	.mpllclk = NULL,
@@ -435,8 +440,8 @@ static int sprd_cpufreq_verify_speed(struct cpufreq_policy *policy)
 	return cpufreq_frequency_table_verify(policy, sprd_cpufreq_conf->freq_tbl);
 }
 
-unsigned int cpufreq_min_limit = ULONG_MAX;
-unsigned int cpufreq_max_limit = 0;
+unsigned int cpufreq_min_limit = 500000;
+unsigned int cpufreq_max_limit = 1500000;
 unsigned int dvfs_score_select = 5;
 unsigned int dvfs_unplug_select = 2;
 unsigned int dvfs_plug_select = 0;
