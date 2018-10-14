@@ -37,7 +37,7 @@
 		};
 	};
 
-	gpu:gpu {
+	gpu {
 		compatible  = "sprd,mali-utgard";
 		mali_pp_core_number = <4>;
 		interrupt-names = "mali_gp_irq",
