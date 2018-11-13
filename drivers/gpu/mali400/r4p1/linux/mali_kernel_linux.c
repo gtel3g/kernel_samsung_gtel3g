@@ -476,6 +476,11 @@ static int mali_probe(struct platform_device *pdev)
 
 	mali_platform_device = pdev;
 
+#ifdef CONFIG_64BIT   
+	static u64 mali_dma_mask = DMA_BIT_MASK(32);	
+	pdev->dev.dma_mask = &mali_dma_mask;
+#endif
+
 #ifdef CONFIG_OF
 	mali_prn_resource();
 

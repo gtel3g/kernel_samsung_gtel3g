@@ -43,7 +43,7 @@
 
 #define GPU_GLITCH_FREE_DFS		0
 
-#define UP_THRESHOLD			9/10
+#define UP_THRESHOLD			7/10
 
 #define GPU_HARDWARE_MIN_DIVISION	1
 #define GPU_HARDWARE_MAX_DIVISION	4
@@ -52,7 +52,11 @@
 /*tshark 28nm*/
 #define DFS_FREQ_NUM			8
 
+#ifdef GPU_MAX_FREQ_512M
+#define GPU_MAX_FREQ			512000
+#else
 #define GPU_MAX_FREQ			460800
+#endif
 #define GPU_MIN_FREQ			64000
 
 #define GPU_150M_FREQ_INDEX 	5
@@ -143,7 +147,11 @@ static struct gpu_clock_source  gpu_clk_src[]=
 	},
 	{
 		.name="clk_312m",
+#ifdef GPU_MAX_FREQ_512M
+		.freq=512000,
+#else
 		.freq=312000,
+#endif
 		.freq_select=4,
 		.clk_src=NULL,
 	},
@@ -247,12 +255,21 @@ static struct gpu_dfs_context gpu_dfs_ctx=
 /*tshark 28nm*/
 	.dfs_freq_list=
 	{
+#ifdef GPU_MAX_FREQ_512M
+		/*index:  0 freq:512000 freq_select:  4  div_select:  1*/
+		&dfs_freq_full_list[8],
+		/*index:  1 freq:460800 freq_select:  6  div_select:  1*/
+		&dfs_freq_full_list[0],
+		/*index:  2 freq:384000 freq_select:  5  div_select:  1*/
+		&dfs_freq_full_list[4],
+#else
 		/*index:  0 freq:460800 freq_select:  6  div_select:  1*/
 		&dfs_freq_full_list[0],
 		/*index:  1 freq:384000 freq_select:  5  div_select:  1*/
 		&dfs_freq_full_list[4],
 		/*index:  2 freq:312000 freq_select:  4  div_select:  1*/
 		&dfs_freq_full_list[8],
+#endif
 		/*index:  3 freq:256000 freq_select:  2  div_select:  1*/
 		&dfs_freq_full_list[12],
 		/*index:  4 freq:208000 freq_select:  1  div_select:  1*/
@@ -428,10 +445,17 @@ static void gpu_dfs_full_list_generate(void)
 	index:  5 freq:192000 freq_select:  5  div_select:  2 up:172800  down:     0
 	index:  6 freq:128000 freq_select:  5  div_select:  3 up:115200  down:     0
 	index:  7 freq: 96000 freq_select:  5  div_select:  4 up: 86400  down:     0
+#ifdef GPU_MAX_FREQ_512M
+	index:  8 freq:512000 freq_select:  4  div_select:  1 up:        down:     0
+	index:  9 freq:256000 freq_select:  4  div_select:  2 up:        down:     0
+	index: 10 freq:128000 freq_select:  4  div_select:  3 up:        down:     0
+	index: 11 freq: 64000 freq_select:  4  div_select:  4 up:        down:     0
+#else
 	index:  8 freq:312000 freq_select:  4  div_select:  1 up:280800  down:     0
 	index:  9 freq:156000 freq_select:  4  div_select:  2 up:140400  down:     0
 	index: 10 freq:104000 freq_select:  4  div_select:  3 up: 93600  down:     0
 	index: 11 freq: 78000 freq_select:  4  div_select:  4 up: 70200  down:     0
+#endif
 	index: 12 freq:256000 freq_select:  2  div_select:  1 up:230400  down:     0
 	index: 13 freq:128000 freq_select:  2  div_select:  2 up:115200  down:     0
 	index: 14 freq: 85333 freq_select:  2  div_select:  3 up: 76800  down:     0
