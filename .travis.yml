@@ -1,0 +1,17 @@
+language: bash
+sudo: enabled
+dist: trusty
+
+git:
+  depth: 1
+
+script:
+  - sudo apt-get update
+  - sudo apt-get --assume-yes install flex bison ncurses-dev texinfo gcc gperf patch libtool automake g++ libncurses5-dev gawk subversion expat libexpat1-dev python-all-dev binutils-static libgcc1:i386 bc libcloog-isl-dev libcap-dev autoconf libgmp-dev build-essential gcc-multilib g++-multilib pkg-config libmpc-dev libmpfr-dev build-essential
+  - git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-eabi-4.7 > /dev/null 2>&1
+  - export CROSS_COMPILE=`pwd`/arm-eabi-4.7/bin/arm-eabi-
+  - export ARCH=arm
+  - export SUBARCH=arm
+  - make ARCH=arm SUBARCH=arm gtel3g_defconfig
+  - make ARCH=arm SUBARCH=arm -j2
+  - ./result.sh
